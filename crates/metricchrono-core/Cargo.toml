@@ -1,0 +1,24 @@
+[package]
+name = "metricchrono-core"
+description = "Open-source MetricChrono kernel, ladders, basic event log, and minimal consensus"
+readme = "README.md"
+keywords = ["time", "metrics", "event", "ffi", "signal"]
+categories = ["algorithms", "science", "simulation"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+
+[lib]
+name = "metricchrono_core"
+
+[[bench]]
+name = "ladder_throughput"
+harness = false
+
+[[bench]]
+name = "clock_only_comparison"
+harness = false

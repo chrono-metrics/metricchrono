@@ -1,0 +1,21 @@
+{
+  "name": "@metricchrono/core",
+  "version": "0.1.0",
+  "description": "Zero-dependency JS reference wrapper for the MetricChrono public kernel",
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chrono-metrics/metricchrono.git",
+    "directory": "bindings/js"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "exports": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "scripts": {
+    "test": "node test/golden.mjs"
+  }
+}

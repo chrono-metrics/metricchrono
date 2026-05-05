@@ -1,0 +1,16 @@
+.codex
+/target/
+**/target/
+Cargo.lock
+*.dylib
+*.so
+*.dll
+*.a
+*.rlib
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+dist/
+build/
+*.egg-info/

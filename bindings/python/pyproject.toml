@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "metricchrono"
+version = "0.1.0"
+description = "Thin Python ctypes wrapper for the MetricChrono Rust C ABI"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+authors = [{ name = "MetricChrono contributors" }]
+
+[project.urls]
+Homepage = "https://github.com/chrono-metrics/metricchrono"
+Repository = "https://github.com/chrono-metrics/metricchrono"
+Issues = "https://github.com/chrono-metrics/metricchrono/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]

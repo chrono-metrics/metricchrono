@@ -1,0 +1,20 @@
+[package]
+name = "metricchrono-ffi"
+description = "C ABI for the open-source MetricChrono core"
+readme = "README.md"
+keywords = ["time", "metrics", "ffi", "c-api", "signal"]
+categories = ["api-bindings", "algorithms", "science"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+
+[lib]
+name = "metricchrono_ffi"
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+metricchrono-core = { path = "../metricchrono-core", version = "0.1.0" }
