@@ -6,5 +6,11 @@ Run:
 cargo run -p metricchrono-core --example smooth_surrogate
 ```
 
-The output is a positive smooth surrogate value near the hard activation
-threshold. It is not expected to equal the hard comparator at the boundary.
+Expected output:
+
+```text
+0.379511568488
+```
+
+This is a smooth surrogate value near the hard activation threshold. It is not
+expected to equal the hard comparator at the boundary.
