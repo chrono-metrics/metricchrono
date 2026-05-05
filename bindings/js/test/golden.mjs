@@ -6,6 +6,7 @@ import {
   EventLog,
   Normalization,
   PromotionCounter,
+  absoluteDistance,
   adaptiveLadderDistance,
   adaptiveZoomWindow,
   carryRules,
@@ -115,6 +116,7 @@ assertClose("updated weights sum", simpleWeightUpdate([0.5, 0.5], residuals, 0.2
 
 assertClose("euclidean", euclideanDistance([0, 0], [3, 4]), 5);
 assertClose("squaredEuclidean", squaredEuclideanDistance([0, 0], [3, 4]), 25);
+assertClose("absolute", absoluteDistance(2, 5.5), 3.5);
 assertClose("manhattan", manhattanDistance([0, 0], [3, 4]), 7);
 assertClose("cosine", cosineDistance([1, 0], [0, 1]), 1);
 assert.equal(kullbackLeiblerDistance([0.2, 0.8], [0.5, 0.5]) > 0, true);
@@ -127,6 +129,10 @@ assertClose(
 assertClose("tickPair", tickPair([0, 0], [3, 4], euclideanDistance, tier(0.5, 1.0, 0, 1)), 5);
 assert.throws(() => tier(1.0, 1.0, 0, 1));
 assert.throws(() => tickDistance(-1, tier(0.5, 1.0, 0, 1)));
+assert.throws(() =>
+  ladderDistance(1, [tier(0.5, 1.0, 0, 1), tier(0.75, 0.9, 0, 1)]),
+);
+assert.throws(() => tickPair([0, 0], [1], euclideanDistance, tier(0.5, 1.0, 0, 1)));
 assert.deepEqual(ladderPair([0, 0], [3, 4], euclideanDistance, ladder).length, 4);
 
 const tierDoc = {

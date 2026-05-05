@@ -25,8 +25,8 @@ fn main() -> metricchrono_core::Result<()> {
 
 - `Tier`, `tick_distance`, and `ladder_distance` implement the deterministic
   epsilon-delta-p kernel.
-- `Metric<T>`, Euclidean, Manhattan, cosine, KL-like, Jensen-Shannon, and
-  diagonal Mahalanobis metrics cover common vector use.
+- `Metric<T>`, scalar absolute, Euclidean, Manhattan, cosine, KL-like,
+  Jensen-Shannon, and diagonal Mahalanobis metrics cover common use.
 - `smooth_tick_distance` and `smooth_ladder_distance` expose differentiable
   surrogates for ML and RL experiments.
 - `EventLog` is a basic in-memory event skip-list for tier-local salient

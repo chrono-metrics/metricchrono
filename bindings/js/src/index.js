@@ -48,6 +48,11 @@ export function validateLadder(ladder) {
         `invalid tier at index ${index}: epsilon values must be strictly increasing`,
       );
     }
+    if (index > 0 && ladder[index].delta <= ladder[index - 1].delta) {
+      throw new MetricChronoError(
+        `invalid tier at index ${index}: delta values must be strictly increasing`,
+      );
+    }
   }
 }
 
@@ -463,6 +468,10 @@ export function euclideanDistance(a, b) {
 export function squaredEuclideanDistance(a, b) {
   ensureSameLength(a, b);
   return a.map((value, index) => (value - b[index]) ** 2).reduce(sum, 0);
+}
+
+export function absoluteDistance(a, b) {
+  return Math.abs(a - b);
 }
 
 export function manhattanDistance(a, b) {

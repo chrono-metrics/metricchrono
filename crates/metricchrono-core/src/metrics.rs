@@ -1,4 +1,4 @@
-use crate::{ladder_distance, tick_distance, Result, Tier};
+use crate::{ladder_distance, try_tick_distance, Result, Tier};
 
 /// Distance metric abstraction for pair APIs.
 pub trait Metric<T: ?Sized> {
@@ -17,6 +17,9 @@ where
         (self.0)(a, b)
     }
 }
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Absolute;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Euclidean;
@@ -81,6 +84,12 @@ impl DiagonalMahalanobis {
 
     pub fn inverse_variance(&self) -> &[f64] {
         &self.inverse_variance
+    }
+}
+
+impl Metric<f64> for Absolute {
+    fn distance(&self, a: &f64, b: &f64) -> f64 {
+        (a - b).abs()
     }
 }
 
@@ -195,8 +204,8 @@ impl Metric<[f64]> for DiagonalMahalanobis {
 }
 
 /// Compute a tick by first measuring a metric distance between two values.
-pub fn tick_pair<T: ?Sized, M: Metric<T>>(a: &T, b: &T, metric: &M, tier: Tier) -> f64 {
-    tick_distance(metric.distance(a, b), tier)
+pub fn tick_pair<T: ?Sized, M: Metric<T>>(a: &T, b: &T, metric: &M, tier: Tier) -> Result<f64> {
+    try_tick_distance(metric.distance(a, b), tier)
 }
 
 /// Compute a ladder vector from a metric distance between two values.

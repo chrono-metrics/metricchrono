@@ -45,7 +45,7 @@ with mc.EventLog(2) as log:
 ## API Surface
 
 - Kernel and ladders: `Tier`, `tick_distance`, `ladder_distance`,
-  `geometric_ladder`.
+  `geometric_ladder`, `Ladder`.
 - Serialization: `tier_from_schema`, `tier_to_schema`, `ladder_from_schema`,
   `ladder_to_schema`, `tick_vector_from_schema`, `tick_vector_to_schema`,
   `consensus_result_from_schema`.

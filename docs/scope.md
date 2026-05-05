@@ -6,6 +6,7 @@ features and multiscale ladder representations.
 In scope:
 
 - the Rust core API;
+- thin Rust crate boundaries for event-log and consensus users;
 - basic metric examples;
 - smooth tick surrogates;
 - an in-memory event log;

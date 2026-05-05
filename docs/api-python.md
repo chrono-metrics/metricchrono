@@ -3,7 +3,7 @@
 Python package:
 
 ```python
-from metricchrono import Tier, geometric_ladder, ladder_distance, tick_distance
+from metricchrono import Ladder, Tier, geometric_ladder, ladder_distance, tick_distance
 ```
 
 Example:
@@ -11,6 +11,9 @@ Example:
 ```python
 tier = Tier(epsilon=0.1, delta=0.3, p=0.5, epsilon_ref=1.0)
 print(tick_distance(0.2, tier))
+
+ladder = Ladder.geometric(0.03, 0.1, 3.0, 3, 0.0, 1.0)
+print(ladder.values(1.0))
 ```
 
 Expected output:

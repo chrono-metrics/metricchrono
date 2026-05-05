@@ -14,6 +14,9 @@ Versioned schema helpers are exported as `tierFromSchema`, `ladderFromSchema`,
 `tickVectorFromSchema`, and `consensusResultFromSchema`, with matching
 `*ToSchema` helpers for local values.
 
+Metric helpers include scalar `absoluteDistance` and vector Euclidean,
+Manhattan, cosine, KL-like, Jensen-Shannon, and diagonal Mahalanobis distances.
+
 `loadWasmMetricChrono` can wrap a compatible WASM module that exports
 `mc_tick_distance_raw`. The repository does not claim a separate optimized WASM
 runtime for v0.1.0; the browser-ready JavaScript implementation is the public

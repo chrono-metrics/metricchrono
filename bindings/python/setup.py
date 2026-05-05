@@ -76,7 +76,12 @@ class sdist(_sdist):
         lockfile = repo_root / "Cargo.lock"
         if lockfile.exists():
             shutil.copy2(lockfile, destination / "Cargo.lock")
-        for crate in ["metricchrono-core", "metricchrono-ffi"]:
+        for crate in [
+            "metricchrono-consensus",
+            "metricchrono-core",
+            "metricchrono-ffi",
+            "metricchrono-log",
+        ]:
             source = repo_root / "crates" / crate
             crate_destination = destination / "crates" / crate
             shutil.copytree(

@@ -26,8 +26,8 @@ pub use ladder::{
     TickVector,
 };
 pub use metrics::{
-    ladder_pair, tick_pair, Cosine, DiagonalMahalanobis, Euclidean, JensenShannon, KullbackLeibler,
-    Manhattan, Metric, MetricFn, SquaredEuclidean,
+    ladder_pair, tick_pair, Absolute, Cosine, DiagonalMahalanobis, Euclidean, JensenShannon,
+    KullbackLeibler, Manhattan, Metric, MetricFn, SquaredEuclidean,
 };
 pub use schema::{ConsensusResultDocument, LadderDocument, TickVectorDocument, TierDocument};
 pub use smooth::{

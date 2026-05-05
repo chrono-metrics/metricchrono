@@ -1,7 +1,9 @@
 [workspace]
 members = [
+    "crates/metricchrono-consensus",
     "crates/metricchrono-core",
     "crates/metricchrono-ffi",
+    "crates/metricchrono-log",
 ]
 resolver = "2"
 

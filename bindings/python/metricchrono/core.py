@@ -4,7 +4,7 @@ import ctypes
 import math
 import os
 import sys
-from collections.abc import Iterable, MutableSequence, Sequence
+from collections.abc import Iterable, Iterator, MutableSequence, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -41,6 +41,38 @@ class Tier:
     delta: float
     p: float = 0.5
     epsilon_ref: float = 1.0
+
+
+@dataclass(frozen=True)
+class Ladder:
+    tiers: tuple[Tier, ...]
+
+    def __init__(self, tiers: Sequence[Tier]) -> None:
+        object.__setattr__(self, "tiers", tuple(tiers))
+
+    @classmethod
+    def geometric(
+        cls,
+        epsilon0: float,
+        delta0: float,
+        ratio: float,
+        tiers: int,
+        p: float = 0.5,
+        epsilon_ref: float = 1.0,
+    ) -> "Ladder":
+        return cls(geometric_ladder(epsilon0, delta0, ratio, tiers, p, epsilon_ref))
+
+    def values(self, distance: float) -> list[float]:
+        return ladder_distance(distance, self)
+
+    def __iter__(self) -> Iterator[Tier]:
+        return iter(self.tiers)
+
+    def __len__(self) -> int:
+        return len(self.tiers)
+
+    def __getitem__(self, index: int) -> Tier:
+        return self.tiers[index]
 
 
 @dataclass(frozen=True)
@@ -234,15 +266,16 @@ def tick_distance(distance: float, tier: Tier) -> float:
     return float(out.value)
 
 
-def ladder_distance(distance: float, tiers: Sequence[Tier]) -> list[float]:
-    tier_array = _tier_array(tiers)
-    out = (ctypes.c_double * len(tiers))()
+def ladder_distance(distance: float, tiers: Union[Sequence[Tier], Ladder]) -> list[float]:
+    values = _coerce_tiers(tiers)
+    tier_array = _tier_array(values)
+    out = (ctypes.c_double * len(values))()
     status = _load_library().mc_ladder_distance(
         float(distance),
         tier_array,
-        len(tiers),
+        len(values),
         out,
-        len(tiers),
+        len(values),
     )
     _check(status)
     return [float(value) for value in out]
@@ -304,7 +337,8 @@ def ladder_from_schema(document: Mapping[str, Any]) -> list[Tier]:
     ]
 
 
-def ladder_to_schema(tiers: Sequence[Tier]) -> dict[str, Any]:
+def ladder_to_schema(tiers: Union[Sequence[Tier], Ladder]) -> dict[str, Any]:
+    values = _coerce_tiers(tiers)
     return {
         "metricchrono_schema": "ladder.v1",
         "tiers": [
@@ -314,7 +348,7 @@ def ladder_to_schema(tiers: Sequence[Tier]) -> dict[str, Any]:
                 "p": tier.p,
                 "epsilon_ref": tier.epsilon_ref,
             }
-            for tier in tiers
+            for tier in values
         ],
     }
 
@@ -353,23 +387,28 @@ def smooth_tick_distance(distance: float, tier: Tier, sharpness: float) -> float
     return float(out.value)
 
 
-def smooth_ladder_distance(distance: float, tiers: Sequence[Tier], sharpness: float) -> list[float]:
-    return [smooth_tick_distance(distance, tier, sharpness) for tier in tiers]
+def smooth_ladder_distance(
+    distance: float,
+    tiers: Union[Sequence[Tier], Ladder],
+    sharpness: float,
+) -> list[float]:
+    return [smooth_tick_distance(distance, tier, sharpness) for tier in _coerce_tiers(tiers)]
 
 
 def adaptive_ladder_distance(
     distance: float,
-    tiers: Sequence[Tier],
+    tiers: Union[Sequence[Tier], Ladder],
 ) -> tuple[list[float], ZoomDecision]:
-    tier_array = _tier_array(tiers)
-    out = (ctypes.c_double * len(tiers))()
+    values = _coerce_tiers(tiers)
+    tier_array = _tier_array(values)
+    out = (ctypes.c_double * len(values))()
     raw_decision = _MCZoomDecision()
     status = _load_library().mc_adaptive_ladder_distance(
         float(distance),
         tier_array,
-        len(tiers),
+        len(values),
         out,
-        len(tiers),
+        len(values),
         ctypes.byref(raw_decision),
     )
     _check(status)
@@ -529,6 +568,12 @@ def _sanitize_signed(value: float) -> float:
     if value == -math.inf:
         return -sys.float_info.max
     return float(value)
+
+
+def _coerce_tiers(tiers: Union[Sequence[Tier], Ladder]) -> Sequence[Tier]:
+    if isinstance(tiers, Ladder):
+        return tiers.tiers
+    return tiers
 
 
 def _ensure_schema(document: Mapping[str, Any], expected: str) -> None:

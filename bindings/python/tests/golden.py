@@ -54,10 +54,12 @@ def test_ladders() -> None:
 
 
 def test_public_api_surface() -> None:
-    ladder = mc.geometric_ladder(0.5, 1.0, 2.0, 4, 0.5, 1.0)
+    ladder = mc.Ladder.geometric(0.5, 1.0, 2.0, 4, 0.5, 1.0)
+    assert len(ladder) == 4
     values = mc.ladder_distance(3.0, ladder)
     assert len(values) == 4
     assert values[0] > values[1] > values[2] > values[3]
+    assert ladder.values(3.0) == values
 
     smooth = mc.smooth_ladder_distance(3.0, ladder, 10.0)
     assert len(smooth) == 4

@@ -82,7 +82,7 @@ impl Default for TierBuilder {
     fn default() -> Self {
         Self {
             epsilon: 1.0,
-            delta: 1.0,
+            delta: 2.0,
             p: 0.5,
             epsilon_ref: 1.0,
         }

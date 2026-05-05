@@ -134,6 +134,7 @@ export function simpleWeightUpdate(
 
 export function euclideanDistance(a: readonly number[], b: readonly number[]): number;
 export function squaredEuclideanDistance(a: readonly number[], b: readonly number[]): number;
+export function absoluteDistance(a: number, b: number): number;
 export function manhattanDistance(a: readonly number[], b: readonly number[]): number;
 export function cosineDistance(a: readonly number[], b: readonly number[]): number;
 export function kullbackLeiblerDistance(

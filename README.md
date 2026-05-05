@@ -27,6 +27,9 @@ This repository contains:
 - `metricchrono-core`: the canonical Rust kernel, ladder utilities, metric
   traits, smooth surrogate, basic in-memory event log, adaptive zoom helpers,
   and minimal consensus tick field.
+- `metricchrono-log`: a thin crate exposing the open in-memory event log.
+- `metricchrono-consensus`: a thin crate exposing the minimal consensus tick
+  field.
 - `metricchrono-ffi`: a C ABI over the allocation-free hot paths and the basic
   event log.
 - `bindings/python`: production Python bindings over the bundled C ABI shared
@@ -130,8 +133,10 @@ The public core is deliberately small:
 
 - `tick_distance(d, tier)` computes a single epsilon-delta-p tick.
 - `ladder_distance(d, ladder, out)` computes a deterministic multiscale vector.
-- `Metric<T>` lets callers plug in Euclidean, squared Euclidean, Manhattan,
-  cosine, KL-like, Jensen-Shannon, diagonal Mahalanobis, or custom distances.
+- `Metric<T>` lets callers plug in scalar absolute, Euclidean, squared
+  Euclidean, Manhattan, cosine, KL-like, Jensen-Shannon, diagonal Mahalanobis,
+  or custom distances. Pair APIs return errors for invalid measured distances,
+  including dimension mismatches surfaced as `NaN` by metric implementations.
 - `smooth_tick_distance` and `smooth_ladder_distance` provide differentiable
   surrogates for ML and RL experiments.
 - `EventLog` is a basic in-memory event skip-list for salient tier jumps.
