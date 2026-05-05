@@ -24,5 +24,5 @@ JavaScript package dry-run:
 
 - Command: `npm pack --dry-run --json` from `bindings/js`
 - Tarball: `metricchrono-core-0.1.0.tgz`
-- Packed size: 6242 bytes
-- Unpacked size: 26393 bytes
+- Packed size: 6256 bytes
+- Unpacked size: 26432 bytes
