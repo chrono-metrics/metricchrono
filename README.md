@@ -126,6 +126,7 @@ published until `metricchrono-core` is already visible in the crates.io index.
 - [Rust API](docs/api-rust.md)
 - [Python API](docs/api-python.md)
 - [WASM / JavaScript API](docs/api-wasm.md)
+- [Benchmarks](docs/benchmarks.md)
 
 ## Public API Surface
 

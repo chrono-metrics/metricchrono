@@ -11,8 +11,10 @@ Before making the repository public:
 git status --short --branch
 git diff --check
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace --all-targets
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-features
+cargo test --workspace --no-default-features
+cargo bench --workspace --no-run
 RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps
 cargo build -p metricchrono-ffi --release
 cmp -s include/metricchrono.h crates/metricchrono-ffi/include/metricchrono.h
@@ -31,9 +33,13 @@ cargo publish -p metricchrono-core
 ```
 
 Wait for `metricchrono-core` to appear in the crates.io index, then publish the
-FFI crate:
+thin log and consensus crates, then the FFI crate:
 
 ```sh
+cargo publish --dry-run -p metricchrono-log
+cargo publish -p metricchrono-log
+cargo publish --dry-run -p metricchrono-consensus
+cargo publish -p metricchrono-consensus
 cargo publish --dry-run -p metricchrono-ffi
 cargo publish -p metricchrono-ffi
 ```
@@ -44,7 +50,7 @@ because `metricchrono-ffi` depends on `metricchrono-core = "0.1.0"`.
 ## JavaScript
 
 ```sh
-npm test --prefix bindings/js
+npm test --prefix bindings/js -- golden
 npm pack --dry-run --prefix bindings/js
 ```
 
@@ -57,6 +63,9 @@ root:
 
 ```sh
 python3 -m pip install build
+python3 -m pip install pytest
+PYTHONPATH=bindings/python METRICCHRONO_FFI_LIB=target/release/libmetricchrono_ffi.dylib \
+  python3 -m pytest bindings/python/tests
 python3 -m build bindings/python --sdist --outdir /tmp/metricchrono-sdist
 python3 -m pip wheel /tmp/metricchrono-sdist/metricchrono-0.1.0.tar.gz --no-deps -w /tmp/metricchrono-wheel
 python3 -m pip install --force-reinstall /tmp/metricchrono-wheel/metricchrono-0.1.0-*.whl
@@ -72,8 +81,12 @@ library. Source installs therefore require Cargo and a Rust toolchain.
 ```sh
 cargo bench -p metricchrono-core --bench clock_only_comparison
 cargo bench -p metricchrono-core --bench ladder_throughput
+cargo bench -p metricchrono-core --bench publish_suite
 ```
 
-The included benchmark is a deterministic synthetic guardrail: it verifies that
+The included benchmarks are deterministic release guardrails. The clock-only
+comparison verifies that
 the tick ladder carries state-change signal that fixed-rate clock deltas cannot
-carry. It is not a substitute for domain validation on customer data.
+carry in a synthetic regime. They are not a substitute for domain validation on
+customer data, and no public nanosecond claim should be made without machine,
+compiler, flags, and method details.

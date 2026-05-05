@@ -26,5 +26,9 @@ name = "ladder_throughput"
 harness = false
 
 [[bench]]
+name = "publish_suite"
+harness = false
+
+[[bench]]
 name = "clock_only_comparison"
 harness = false
