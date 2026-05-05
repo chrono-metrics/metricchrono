@@ -51,18 +51,24 @@ that is easy to store, compare, index, and feed into downstream models.
 
 ```rust
 use metricchrono_core::{
-    geometric_ladder, ladder_values, tick_distance, Euclidean, Tier,
+    geometric_ladder, ladder_pair, ladder_values, tick_distance, Euclidean, MetricChronoError,
+    Tier,
 };
 
-let tier = Tier::new(1.0, 0.5, 0.5, 1.0)?;
-assert_eq!(tick_distance(0.25, tier), 0.0);
+fn main() -> Result<(), MetricChronoError> {
+    let tier = Tier::new(1.0, 0.5, 0.5, 1.0)?;
+    assert_eq!(tick_distance(0.25, tier), 0.0);
 
-let ladder = geometric_ladder(0.5, 0.5, 2.0, 4, 0.5, 1.0)?;
-let ticks = ladder_values(3.0, &ladder)?;
+    let ladder = geometric_ladder(0.5, 0.5, 2.0, 4, 0.5, 1.0)?;
+    let ticks = ladder_values(3.0, &ladder)?;
+    println!("{ticks:?}");
 
-let metric = Euclidean;
-let paired = metricchrono_core::ladder_pair(&[0.0, 0.0][..], &[3.0, 4.0][..], &metric, &ladder)?;
-# Ok::<(), metricchrono_core::MetricChronoError>(())
+    let metric = Euclidean;
+    let paired = ladder_pair(&[0.0, 0.0][..], &[3.0, 4.0][..], &metric, &ladder)?;
+    println!("{paired:?}");
+
+    Ok(())
+}
 ```
 
 ## Build And Test
@@ -74,6 +80,7 @@ cargo run -p metricchrono-core --example basic
 cargo bench -p metricchrono-core --bench ladder_throughput
 cargo bench -p metricchrono-core --bench clock_only_comparison
 (cd bindings/js && npm test)
+python3 -m pip wheel bindings/python --no-deps -w /tmp/metricchrono-wheel
 ```
 
 Build the C ABI shared library:
@@ -82,8 +89,9 @@ Build the C ABI shared library:
 cargo build -p metricchrono-ffi --release
 ```
 
-For Python, point the wrapper at the built library when it is not installed in a
-standard loader path:
+The Python wheel builds and bundles the native FFI library when Cargo is
+available. For direct source-tree use without installing the wheel, point the
+wrapper at a locally built library:
 
 ```sh
 export METRICCHRONO_FFI_LIB=target/release/libmetricchrono_ffi.dylib
@@ -91,6 +99,13 @@ python -c "import metricchrono; print(metricchrono.tick_distance(1.2, metricchro
 ```
 
 On Linux the shared library suffix is `.so`; on Windows it is `.dll`.
+
+## Release Readiness
+
+This repository is designed to publish in ordered layers: Rust core first, then
+the Rust FFI crate, then language wrappers. The full checklist is in
+[docs/release.md](docs/release.md). In particular, `metricchrono-ffi` cannot be
+published until `metricchrono-core` is already visible in the crates.io index.
 
 ## Public API Surface
 
