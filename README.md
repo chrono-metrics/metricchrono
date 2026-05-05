@@ -62,10 +62,10 @@ use metricchrono_core::{
 };
 
 fn main() -> Result<(), MetricChronoError> {
-    let tier = Tier::new(1.0, 0.5, 0.5, 1.0)?;
+    let tier = Tier::new(0.5, 1.0, 0.5, 1.0)?;
     assert_eq!(tick_distance(0.25, tier), 0.0);
 
-    let ladder = geometric_ladder(0.5, 0.5, 2.0, 4, 0.5, 1.0)?;
+    let ladder = geometric_ladder(0.5, 1.0, 2.0, 4, 0.5, 1.0)?;
     let ticks = ladder_values(3.0, &ladder)?;
     println!("{ticks:?}");
 

@@ -11,6 +11,12 @@ cargo build -p metricchrono-ffi --release
 
 Core symbols:
 
+- `mc_error_message`
+- `mc_tier_new`
+- `mc_ladder_new`
+- `mc_ladder_free`
+- `mc_ladder_len`
+- `mc_ladder_distance_owned`
 - `mc_tick_distance`
 - `mc_ladder_distance`
 - `mc_smooth_tick_distance`
@@ -25,5 +31,14 @@ Core symbols:
 
 The public C declarations live in [`include/metricchrono.h`](../include/metricchrono.h).
 
-All functions return `MCStatus`. Output buffers are caller-owned. Passing a
+Most functions return `MCStatus`. Output buffers are caller-owned. Passing a
 buffer shorter than the documented length returns `MC_STATUS_BUFFER_TOO_SMALL`.
+
+`MCLadder` and `MCEventLog` are opaque handles owned by the caller. Every
+successful `mc_ladder_new` must be paired with `mc_ladder_free`, and every
+successful `mc_event_log_new` must be paired with `mc_event_log_free`.
+
+No Rust panic is allowed to cross the C ABI boundary. C-callable functions catch
+panics and report `MC_STATUS_PANIC`. The C ABI stores no global mutable state;
+separate handles can be used independently, but concurrent access to the same
+handle must be synchronized by the caller.

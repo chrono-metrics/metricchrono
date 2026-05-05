@@ -53,7 +53,7 @@ def test_ladders() -> None:
 
 
 def test_public_api_surface() -> None:
-    ladder = mc.geometric_ladder(0.5, 0.5, 2.0, 4, 0.5, 1.0)
+    ladder = mc.geometric_ladder(0.5, 1.0, 2.0, 4, 0.5, 1.0)
     values = mc.ladder_distance(3.0, ladder)
     assert len(values) == 4
     assert values[0] > values[1] > values[2] > values[3]
@@ -82,6 +82,20 @@ def test_public_api_surface() -> None:
         assert len(log) == 2
         assert log.next_event(0, 0) == 1
         assert log.next_event(0, 1) is None
+
+    try:
+        mc.tick_distance(-1.0, mc.Tier(0.5, 1.0, 0.0, 1.0))
+    except mc.NativeStatusError:
+        pass
+    else:
+        raise AssertionError("negative distance should raise")
+
+    try:
+        mc.tick_distance(1.0, mc.Tier(1.0, 1.0, 0.0, 1.0))
+    except mc.NativeStatusError:
+        pass
+    else:
+        raise AssertionError("epsilon >= delta should raise")
 
 
 if __name__ == "__main__":

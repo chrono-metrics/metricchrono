@@ -45,6 +45,12 @@ impl Tier {
                 reason: "delta must be finite and > 0",
             });
         }
+        if self.epsilon >= self.delta {
+            return Err(MetricChronoError::InvalidTier {
+                index,
+                reason: "epsilon must be < delta",
+            });
+        }
         if !self.p.is_finite() {
             return Err(MetricChronoError::InvalidTier {
                 index,

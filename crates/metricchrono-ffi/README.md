@@ -25,6 +25,9 @@ Core functions return `MCStatus` and write results into caller-owned output
 buffers:
 
 - `mc_tick_distance`
+- `mc_tier_new`
+- `mc_ladder_new`, `mc_ladder_distance_owned`, `mc_ladder_len`, and
+  `mc_ladder_free`
 - `mc_ladder_distance`
 - `mc_adaptive_ladder_distance`
 - `mc_smooth_tick_distance`
@@ -37,6 +40,7 @@ buffers:
 Invalid pointers return `MC_STATUS_NULL`, short buffers return
 `MC_STATUS_BUFFER_TOO_SMALL`, invalid inputs return
 `MC_STATUS_INVALID_ARGUMENT`, and caught Rust panics return `MC_STATUS_PANIC`.
+Use `mc_error_message` for a static human-readable status string.
 
 ## Publish Order
 

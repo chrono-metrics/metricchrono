@@ -1,16 +1,16 @@
 use metricchrono_core::{
     adaptive_ladder_distance, coherence_residuals, geometric_ladder, ladder_pair,
     simple_weight_update, smooth_ladder_values, weighted_consensus, Euclidean, EventLog,
-    PromotionCounter,
+    PromotionCounter, SmoothParams,
 };
 
 fn main() -> metricchrono_core::Result<()> {
-    let ladder = geometric_ladder(0.5, 0.5, 2.0, 4, 0.5, 1.0)?;
+    let ladder = geometric_ladder(0.5, 1.0, 2.0, 4, 0.5, 1.0)?;
     let metric = Euclidean;
     let ticks = ladder_pair(&[0.0, 0.0][..], &[3.0, 4.0][..], &metric, &ladder)?;
     println!("ticks: {ticks:?}");
 
-    let smooth = smooth_ladder_values(3.0, &ladder, 10.0)?;
+    let smooth = smooth_ladder_values(3.0, &ladder, SmoothParams::sharpness(10.0)?)?;
     println!("smooth: {smooth:?}");
 
     let mut early = vec![0.0; ladder.len()];

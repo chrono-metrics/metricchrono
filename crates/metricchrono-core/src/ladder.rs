@@ -10,6 +10,61 @@ pub enum Normalization {
     Tanh,
 }
 
+/// Owned validated ladder configuration.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Ladder {
+    tiers: Vec<Tier>,
+}
+
+/// Owned tick-vector output.
+pub type TickVector = Vec<f64>;
+
+impl Ladder {
+    pub fn new(tiers: impl Into<Vec<Tier>>) -> Result<Self> {
+        let tiers = custom_ladder(tiers)?;
+        Ok(Self { tiers })
+    }
+
+    pub fn geometric(
+        epsilon0: f64,
+        delta0: f64,
+        ratio: f64,
+        tiers: usize,
+        p: f64,
+        epsilon_ref: f64,
+    ) -> Result<Self> {
+        Ok(Self {
+            tiers: geometric_ladder(epsilon0, delta0, ratio, tiers, p, epsilon_ref)?,
+        })
+    }
+
+    pub fn len(&self) -> usize {
+        self.tiers.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.tiers.is_empty()
+    }
+
+    pub fn tiers(&self) -> &[Tier] {
+        &self.tiers
+    }
+
+    pub fn distance_into(&self, distance: f64, out: &mut [f64]) -> Result<()> {
+        ladder_distance(distance, &self.tiers, out)
+    }
+
+    pub fn values(&self, distance: f64) -> Result<TickVector> {
+        ladder_values(distance, &self.tiers)
+    }
+}
+
+impl AsRef<[Tier]> for Ladder {
+    fn as_ref(&self) -> &[Tier] {
+        self.tiers()
+    }
+}
+
 /// Compute the single-scale epsilon-delta-p tick.
 ///
 /// This function assumes `tier` is valid. Use [`try_tick_distance`] when inputs
@@ -26,12 +81,14 @@ pub fn tick_distance(distance: f64, tier: Tier) -> f64 {
 /// Validate the tier and compute a single-scale tick.
 pub fn try_tick_distance(distance: f64, tier: Tier) -> Result<f64> {
     tier.validate_at(0)?;
+    ensure_distance(distance)?;
     Ok(tick_distance(distance, tier))
 }
 
 /// Fill `out` with the tick vector for `distance` across `ladder`.
 pub fn ladder_distance(distance: f64, ladder: &[Tier], out: &mut [f64]) -> Result<()> {
     validate_ladder(ladder)?;
+    ensure_distance(distance)?;
     ensure_output(ladder.len(), out.len())?;
     for (slot, tier) in out.iter_mut().zip(ladder.iter().copied()) {
         *slot = tick_distance(distance, tier);
@@ -90,6 +147,12 @@ pub fn validate_ladder(ladder: &[Tier]) -> Result<()> {
             return Err(MetricChronoError::InvalidTier {
                 index,
                 reason: "epsilon values must be strictly increasing",
+            });
+        }
+        if index > 0 && tier.delta <= ladder[index - 1].delta {
+            return Err(MetricChronoError::InvalidTier {
+                index,
+                reason: "delta values must be strictly increasing",
             });
         }
     }
@@ -258,6 +321,16 @@ pub(crate) fn ensure_shape(expected: usize, actual: usize, context: &'static str
             actual,
             context,
         })
+    } else {
+        Ok(())
+    }
+}
+
+pub(crate) fn ensure_distance(distance: f64) -> Result<()> {
+    if !distance.is_finite() || distance < 0.0 {
+        Err(MetricChronoError::InvalidArgument(
+            "distance must be finite and >= 0",
+        ))
     } else {
         Ok(())
     }

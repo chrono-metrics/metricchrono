@@ -24,6 +24,9 @@ export function validateTier(tierSpec, index = 0) {
   if (!Number.isFinite(tierSpec.delta) || tierSpec.delta <= 0) {
     throw new MetricChronoError(`invalid tier at index ${index}: delta must be finite and > 0`);
   }
+  if (tierSpec.epsilon >= tierSpec.delta) {
+    throw new MetricChronoError(`invalid tier at index ${index}: epsilon must be < delta`);
+  }
   if (!Number.isFinite(tierSpec.p)) {
     throw new MetricChronoError(`invalid tier at index ${index}: p must be finite`);
   }
@@ -50,7 +53,8 @@ export function validateLadder(ladder) {
 
 export function tickDistance(distance, tierSpec) {
   validateTier(tierSpec);
-  const d = sanitizeDistance(distance);
+  assertDistance(distance);
+  const d = distance;
   if (d < tierSpec.epsilon) {
     return 0;
   }
@@ -90,7 +94,8 @@ export function smoothTickDistance(distance, tierSpec, sharpness) {
   if (!Number.isFinite(sharpness) || sharpness <= 0) {
     throw new MetricChronoError("sharpness must be finite and > 0");
   }
-  const d = sanitizeDistance(distance);
+  assertDistance(distance);
+  const d = distance;
   const gate = sigmoid(sharpness * (d - tierSpec.epsilon));
   const stair = smoothStair(d / tierSpec.delta, sharpness);
   const gain = Math.pow(tierSpec.epsilon / tierSpec.epsilonRef, tierSpec.p);
@@ -198,7 +203,8 @@ export class PromotionCounter {
 
 export function adaptiveLadderDistance(distance, ladder) {
   validateLadder(ladder);
-  const d = sanitizeDistance(distance);
+  assertDistance(distance);
+  const d = distance;
   const ticks = Array.from({ length: ladder.length }, () => 0);
   for (let index = 0; index < ladder.length; index += 1) {
     if (d < ladder[index].epsilon) {
@@ -225,7 +231,8 @@ export function adaptiveLadderDistance(distance, ladder) {
 
 export function adaptiveZoomWindow(distance, ladder, radius) {
   validateLadder(ladder);
-  const d = sanitizeDistance(distance);
+  assertDistance(distance);
+  const d = distance;
   let center = -1;
   for (let index = 0; index < ladder.length; index += 1) {
     if (d >= ladder[index].epsilon) {
@@ -494,14 +501,10 @@ function smoothStair(x, sharpness) {
   return out;
 }
 
-function sanitizeDistance(distance) {
-  if (Number.isNaN(distance) || distance < 0) {
-    return 0;
+function assertDistance(distance) {
+  if (!Number.isFinite(distance) || distance < 0) {
+    throw new MetricChronoError("distance must be finite and >= 0");
   }
-  if (distance === Infinity) {
-    return Number.MAX_VALUE;
-  }
-  return distance;
 }
 
 function sanitizeSigned(value) {

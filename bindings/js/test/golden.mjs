@@ -56,7 +56,7 @@ for (const row of readCsv("fixtures/golden_ladders.csv").slice(1)) {
   }
 }
 
-const ladder = geometricLadder(0.5, 0.5, 2.0, 4, 0.5, 1.0);
+const ladder = geometricLadder(0.5, 1.0, 2.0, 4, 0.5, 1.0);
 assert.equal(smoothTickDistance(0.95, tier(1.0, 2.0, 0.5, 1.0), 10.0) > 0, true);
 assert.equal(smoothLadderDistance(2.0, ladder, 10.0).length, 4);
 assert.deepEqual(normalizeTicks([10, 5, 3], Normalization.UnitMax), [1, 0.5, 0.3]);
@@ -116,7 +116,9 @@ assertClose(
   diagonalMahalanobisDistance([0, 0], [4, 3], [0.25, 1.0]),
   Math.sqrt(13),
 );
-assertClose("tickPair", tickPair([0, 0], [3, 4], euclideanDistance, tier(0.5, 0.5, 0, 1)), 10);
+assertClose("tickPair", tickPair([0, 0], [3, 4], euclideanDistance, tier(0.5, 1.0, 0, 1)), 5);
+assert.throws(() => tier(1.0, 1.0, 0, 1));
+assert.throws(() => tickDistance(-1, tier(0.5, 1.0, 0, 1)));
 assert.deepEqual(ladderPair([0, 0], [3, 4], euclideanDistance, ladder).length, 4);
 
 function readCsv(path) {

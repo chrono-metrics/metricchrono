@@ -24,7 +24,7 @@ import {
 const t = tier(0.5, 1.0, 0.5, 1.0);
 console.log(tickDistance(1.2, t));
 
-const ladder = geometricLadder(0.5, 0.5, 2.0, 4, 0.5, 1.0);
+const ladder = geometricLadder(0.5, 1.0, 2.0, 4, 0.5, 1.0);
 console.log(ladderDistance(3.0, ladder));
 
 const log = new EventLog(2);

@@ -3,8 +3,9 @@ use metricchrono_core::{
     coherence_residuals, custom_ladder, geometric_ladder, ladder_distance, ladder_pair,
     ladder_values, normalize_ticks, simple_weight_update, smooth_ladder_values,
     smooth_tick_distance, tick_distance, try_tick_distance, validate_ladder, weighted_consensus,
-    DiagonalMahalanobis, Euclidean, EventLog, JensenShannon, KullbackLeibler, Metric,
-    MetricChronoError, Normalization, PromotionCounter, Tier,
+    zoom_ladder_distance, DiagonalMahalanobis, Euclidean, EventLog, JensenShannon, KullbackLeibler,
+    Ladder, Metric, MetricChronoError, Normalization, PromotionCounter, SmoothParams, Tier,
+    ZoomPolicy,
 };
 
 #[test]
@@ -13,10 +14,15 @@ fn kernel_and_ladder_match_epsilon_delta_p_contract() {
     assert_eq!(tick_distance(0.49, tier), 0.0);
     assert_eq!(tick_distance(0.5, tier), 0.5_f64.sqrt());
     assert_eq!(tick_distance(1.2, tier), 2.0_f64.sqrt());
-    assert_eq!(try_tick_distance(f64::NAN, tier).unwrap(), 0.0);
+    assert!(try_tick_distance(-1.0, tier).is_err());
+    assert!(try_tick_distance(f64::NAN, tier).is_err());
+    assert!(Tier::new(1.0, 1.0, 0.0, 1.0).is_err());
 
     let ladder = geometric_ladder(0.5, 1.0, 2.0, 3, 0.5, 1.0).unwrap();
     validate_ladder(&ladder).unwrap();
+    let owned = Ladder::new(ladder.clone()).unwrap();
+    assert_eq!(owned.len(), 3);
+    assert_eq!(owned.tiers(), ladder.as_slice());
     let values = ladder_values(2.2, &ladder).unwrap();
     assert_eq!(values.len(), 3);
     assert!(values[0] > values[1]);
@@ -51,18 +57,18 @@ fn public_metric_examples_include_divergence_and_mahalanobis() {
 #[test]
 fn custom_ladders_metrics_and_normalization_are_public_and_deterministic() {
     let ladder = custom_ladder(vec![
-        Tier::new(0.5, 0.5, 0.0, 1.0).unwrap(),
-        Tier::new(1.0, 1.0, 0.0, 1.0).unwrap(),
-        Tier::new(2.0, 2.0, 0.0, 1.0).unwrap(),
+        Tier::new(0.5, 1.0, 0.0, 1.0).unwrap(),
+        Tier::new(1.0, 2.0, 0.0, 1.0).unwrap(),
+        Tier::new(2.0, 4.0, 0.0, 1.0).unwrap(),
     ])
     .unwrap();
     let metric = Euclidean;
     let values = ladder_pair(&[0.0, 0.0][..], &[3.0, 4.0][..], &metric, &ladder).unwrap();
-    assert_eq!(values, vec![10.0, 5.0, 3.0]);
+    assert_eq!(values, vec![5.0, 3.0, 2.0]);
 
     let mut normalized = [0.0; 3];
     normalize_ticks(&values, Normalization::UnitMax, &mut normalized).unwrap();
-    assert_eq!(normalized, [1.0, 0.5, 0.3]);
+    assert_eq!(normalized, [1.0, 0.6, 0.4]);
 
     let mut tanh = [0.0; 3];
     normalize_ticks(&values, Normalization::Tanh, &mut tanh).unwrap();
@@ -73,14 +79,23 @@ fn custom_ladders_metrics_and_normalization_are_public_and_deterministic() {
 fn smooth_surrogate_is_positive_near_threshold() {
     let tier = Tier::new(1.0, 2.0, 0.5, 1.0).unwrap();
     let hard = tick_distance(0.95, tier);
-    let smooth = smooth_tick_distance(0.95, tier, 10.0).unwrap();
+    let params = SmoothParams::sharpness(10.0).unwrap();
+    let smooth = smooth_tick_distance(0.95, tier, params).unwrap();
     assert_eq!(hard, 0.0);
     assert!(smooth > 0.0);
 
-    let ladder = geometric_ladder(0.5, 0.5, 2.0, 3, 0.5, 1.0).unwrap();
-    let values = smooth_ladder_values(2.0, &ladder, 10.0).unwrap();
+    let ladder = geometric_ladder(0.5, 1.0, 2.0, 3, 0.5, 1.0).unwrap();
+    let values = smooth_ladder_values(3.0, &ladder, params).unwrap();
     assert_eq!(values.len(), 3);
     assert!(values[0] > values[2]);
+    assert!(values
+        .iter()
+        .all(|value| value.is_finite() && *value >= 0.0));
+
+    let sharper = SmoothParams::sharpness(100.0).unwrap();
+    let hard_far = tick_distance(3.0, tier);
+    let smooth_far = smooth_tick_distance(3.0, tier, sharper).unwrap();
+    assert!((hard_far - smooth_far).abs() < 0.1);
 }
 
 #[test]
@@ -119,7 +134,7 @@ fn event_log_tracks_tier_local_next_events() {
 
 #[test]
 fn adaptive_zoom_stops_when_coarser_tiers_are_inactive() {
-    let ladder = geometric_ladder(0.5, 0.5, 2.0, 4, 0.5, 1.0).unwrap();
+    let ladder = geometric_ladder(0.5, 1.0, 2.0, 4, 0.5, 1.0).unwrap();
     let mut out = [99.0; 4];
     let decision = adaptive_ladder_distance(0.75, &ladder, &mut out).unwrap();
     assert_eq!(decision.first_inactive_tier, Some(1));
@@ -129,6 +144,15 @@ fn adaptive_zoom_stops_when_coarser_tiers_are_inactive() {
 
     let window = adaptive_zoom_window(3.0, &ladder, 1).unwrap().unwrap();
     assert_eq!(window, 1..4);
+
+    let mut fixed = [99.0; 4];
+    let fixed_decision =
+        zoom_ladder_distance(3.0, &ladder, ZoomPolicy::FixedDepth(2), &mut fixed).unwrap();
+    assert_eq!(fixed_decision.evaluated_tiers, 2);
+    assert!(fixed[0] > 0.0 && fixed[1] > 0.0);
+    assert_eq!(&fixed[2..], &[0.0, 0.0]);
+
+    assert!(zoom_ladder_distance(3.0, &ladder, ZoomPolicy::DepthCap(5), &mut fixed).is_err());
 }
 
 #[test]

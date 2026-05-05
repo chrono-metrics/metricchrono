@@ -3,7 +3,7 @@ use std::time::Instant;
 use metricchrono_core::{geometric_ladder, ladder_distance};
 
 fn main() {
-    let ladder = geometric_ladder(0.001, 0.001, 1.7, 32, 0.5, 1.0).unwrap();
+    let ladder = geometric_ladder(0.001, 0.002, 1.7, 32, 0.5, 1.0).unwrap();
     let mut out = vec![0.0; ladder.len()];
     let iterations = 250_000;
 

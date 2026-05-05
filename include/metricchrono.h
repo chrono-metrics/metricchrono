@@ -31,7 +31,22 @@ typedef struct MCZoomDecision {
   bool stopped_early;
 } MCZoomDecision;
 
+typedef struct MCLadder MCLadder;
 typedef struct MCEventLog MCEventLog;
+
+const char *mc_error_message(MCStatus status);
+MCStatus mc_tier_new(double epsilon,
+                     double delta,
+                     double p,
+                     double epsilon_ref,
+                     MCTier *out);
+MCStatus mc_ladder_new(const MCTier *tiers, size_t len, MCLadder **out);
+void mc_ladder_free(MCLadder *ladder);
+MCStatus mc_ladder_len(const MCLadder *ladder, size_t *out_len);
+MCStatus mc_ladder_distance_owned(const MCLadder *ladder,
+                                  double distance,
+                                  double *out,
+                                  size_t out_len);
 
 MCStatus mc_tick_distance(double distance, MCTier tier, double *out);
 MCStatus mc_ladder_distance(double distance,

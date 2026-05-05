@@ -29,9 +29,9 @@ fn main() {
 
 fn metricchrono_accuracy(samples: &[Sample]) -> f64 {
     let ladder = [
-        Tier::new(0.35, 0.35, 0.0, 1.0).unwrap(),
-        Tier::new(0.75, 0.75, 0.0, 1.0).unwrap(),
-        Tier::new(1.35, 1.35, 0.0, 1.0).unwrap(),
+        Tier::new(0.35, 0.50, 0.0, 1.0).unwrap(),
+        Tier::new(0.75, 1.00, 0.0, 1.0).unwrap(),
+        Tier::new(1.35, 1.80, 0.0, 1.0).unwrap(),
     ];
     let mut ticks = [0.0; 3];
     let scores = samples.iter().map(|sample| {

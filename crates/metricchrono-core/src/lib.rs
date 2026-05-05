@@ -21,12 +21,17 @@ pub use error::{MetricChronoError, Result};
 pub use event_log::{EventLog, EventRecord, EventSummary, TierEventIter};
 pub use ladder::{
     carry_rules, custom_ladder, geometric_ladder, ladder_distance, ladder_values, normalize_ticks,
-    tick_distance, try_tick_distance, validate_ladder, Normalization, PromotionCounter,
+    tick_distance, try_tick_distance, validate_ladder, Ladder, Normalization, PromotionCounter,
+    TickVector,
 };
 pub use metrics::{
     ladder_pair, tick_pair, Cosine, DiagonalMahalanobis, Euclidean, JensenShannon, KullbackLeibler,
     Manhattan, Metric, MetricFn, SquaredEuclidean,
 };
-pub use smooth::{smooth_ladder_distance, smooth_ladder_values, smooth_tick_distance};
+pub use smooth::{
+    smooth_ladder_distance, smooth_ladder_values, smooth_tick_distance, SmoothParams,
+};
 pub use tier::{Tier, TierBuilder};
-pub use zoom::{adaptive_ladder_distance, adaptive_zoom_window, ZoomDecision};
+pub use zoom::{
+    adaptive_ladder_distance, adaptive_zoom_window, zoom_ladder_distance, ZoomDecision, ZoomPolicy,
+};

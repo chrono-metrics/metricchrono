@@ -1,11 +1,13 @@
 #![allow(clippy::missing_safety_doc)]
 
+use std::ffi::c_char;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
 
 use metricchrono_core::{
-    adaptive_ladder_distance, geometric_ladder, ladder_distance, simple_weight_update,
-    smooth_tick_distance, tick_distance, weighted_consensus, EventLog, Tier,
+    adaptive_ladder_distance, custom_ladder, geometric_ladder, ladder_distance,
+    simple_weight_update, smooth_tick_distance, tick_distance, weighted_consensus, EventLog,
+    SmoothParams, Tier,
 };
 
 #[repr(C)]
@@ -38,6 +40,10 @@ pub struct MCZoomDecision {
 
 pub struct MCEventLog {
     inner: EventLog<u64>,
+}
+
+pub struct MCLadder {
+    tiers: Vec<Tier>,
 }
 
 impl From<MCTier> for Tier {
@@ -79,6 +85,17 @@ fn status_from_error(error: metricchrono_core::MetricChronoError) -> MCStatus {
     }
 }
 
+#[no_mangle]
+pub extern "C" fn mc_error_message(status: MCStatus) -> *const c_char {
+    match status {
+        MCStatus::Ok => b"ok\0".as_ptr().cast(),
+        MCStatus::Null => b"null pointer\0".as_ptr().cast(),
+        MCStatus::InvalidArgument => b"invalid argument\0".as_ptr().cast(),
+        MCStatus::BufferTooSmall => b"buffer too small\0".as_ptr().cast(),
+        MCStatus::Panic => b"panic\0".as_ptr().cast(),
+    }
+}
+
 unsafe fn slice_from_ptr<'a, T>(ptr: *const T, len: usize) -> Option<&'a [T]> {
     if len == 0 {
         Some(&[])
@@ -97,6 +114,98 @@ unsafe fn slice_from_mut_ptr<'a, T>(ptr: *mut T, len: usize) -> Option<&'a mut [
     } else {
         Some(std::slice::from_raw_parts_mut(ptr, len))
     }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_tier_new(
+    epsilon: f64,
+    delta: f64,
+    p: f64,
+    epsilon_ref: f64,
+    out: *mut MCTier,
+) -> MCStatus {
+    ffi_status(|| {
+        let Some(out) = (unsafe { out.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        match Tier::new(epsilon, delta, p, epsilon_ref) {
+            Ok(tier) => {
+                *out = tier.into();
+                MCStatus::Ok
+            }
+            Err(error) => status_from_error(error),
+        }
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_ladder_new(
+    tiers: *const MCTier,
+    len: usize,
+    out: *mut *mut MCLadder,
+) -> MCStatus {
+    ffi_status(|| {
+        let Some(out) = (unsafe { out.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        let Some(tiers) = (unsafe { slice_from_ptr(tiers, len) }) else {
+            return MCStatus::Null;
+        };
+        let tiers: Vec<Tier> = tiers.iter().copied().map(Tier::from).collect();
+        match custom_ladder(tiers) {
+            Ok(tiers) => {
+                *out = Box::into_raw(Box::new(MCLadder { tiers }));
+                MCStatus::Ok
+            }
+            Err(error) => {
+                *out = ptr::null_mut();
+                status_from_error(error)
+            }
+        }
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_ladder_free(ladder: *mut MCLadder) {
+    if ladder.is_null() {
+        return;
+    }
+    let _ = catch_unwind(AssertUnwindSafe(|| unsafe {
+        drop(Box::from_raw(ladder));
+    }));
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_ladder_len(ladder: *const MCLadder, out_len: *mut usize) -> MCStatus {
+    ffi_status(|| {
+        let Some(ladder) = (unsafe { ladder.as_ref() }) else {
+            return MCStatus::Null;
+        };
+        let Some(out_len) = (unsafe { out_len.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        *out_len = ladder.tiers.len();
+        MCStatus::Ok
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_ladder_distance_owned(
+    ladder: *const MCLadder,
+    distance: f64,
+    out: *mut f64,
+    out_len: usize,
+) -> MCStatus {
+    ffi_status(|| {
+        let Some(ladder) = (unsafe { ladder.as_ref() }) else {
+            return MCStatus::Null;
+        };
+        let Some(out) = (unsafe { slice_from_mut_ptr(out, out_len) }) else {
+            return MCStatus::Null;
+        };
+        ladder_distance(distance, &ladder.tiers, out)
+            .map_or_else(status_from_error, |_| MCStatus::Ok)
+    })
 }
 
 #[no_mangle]
@@ -180,7 +289,10 @@ pub unsafe extern "C" fn mc_smooth_tick_distance(
         let Some(out) = (unsafe { out.as_mut() }) else {
             return MCStatus::Null;
         };
-        match smooth_tick_distance(distance, Tier::from(tier), sharpness) {
+        let Ok(params) = SmoothParams::sharpness(sharpness) else {
+            return MCStatus::InvalidArgument;
+        };
+        match smooth_tick_distance(distance, Tier::from(tier), params) {
             Ok(value) => {
                 *out = value;
                 MCStatus::Ok
@@ -393,12 +505,20 @@ mod tests {
 
     #[test]
     fn ffi_tick_and_ladder_return_stable_values() {
-        let tier = MCTier {
-            epsilon: 0.5,
-            delta: 1.0,
-            p: 0.5,
-            epsilon_ref: 1.0,
+        let mut tier = MCTier {
+            epsilon: 0.0,
+            delta: 0.0,
+            p: 0.0,
+            epsilon_ref: 0.0,
         };
+        assert_eq!(
+            unsafe { mc_tier_new(0.5, 1.0, 0.5, 1.0, &mut tier) },
+            MCStatus::Ok
+        );
+        assert_eq!(
+            unsafe { mc_tier_new(1.0, 1.0, 0.0, 1.0, &mut tier) },
+            MCStatus::InvalidArgument
+        );
         let mut out = 0.0;
         assert_eq!(
             unsafe { mc_tick_distance(1.2, tier, &mut out) },
@@ -429,6 +549,25 @@ mod tests {
             MCStatus::Ok
         );
         assert!(values[0] > 0.0 && values[1] > 0.0);
+
+        let mut ladder = std::ptr::null_mut();
+        assert_eq!(
+            unsafe { mc_ladder_new(tiers.as_ptr(), tiers.len(), &mut ladder) },
+            MCStatus::Ok
+        );
+        assert!(!ladder.is_null());
+        let mut len = 0;
+        assert_eq!(unsafe { mc_ladder_len(ladder, &mut len) }, MCStatus::Ok);
+        assert_eq!(len, 2);
+        let mut owned_values = [0.0; 2];
+        assert_eq!(
+            unsafe {
+                mc_ladder_distance_owned(ladder, 1.2, owned_values.as_mut_ptr(), owned_values.len())
+            },
+            MCStatus::Ok
+        );
+        assert_eq!(values, owned_values);
+        unsafe { mc_ladder_free(ladder) };
     }
 
     #[test]

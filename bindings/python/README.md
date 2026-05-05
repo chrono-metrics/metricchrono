@@ -33,7 +33,7 @@ Use `.so` on Linux and `.dll` on Windows.
 ```python
 import metricchrono as mc
 
-ladder = mc.geometric_ladder(0.5, 0.5, 2.0, 4, 0.5, 1.0)
+ladder = mc.geometric_ladder(0.5, 1.0, 2.0, 4, 0.5, 1.0)
 print(mc.ladder_distance(3.0, ladder))
 
 with mc.EventLog(2) as log:
