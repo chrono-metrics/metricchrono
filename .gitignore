@@ -11,6 +11,7 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
+bindings/python/rust/
 dist/
 build/
 *.egg-info/

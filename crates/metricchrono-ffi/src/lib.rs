@@ -230,6 +230,9 @@ pub unsafe extern "C" fn mc_weighted_consensus(
     out_len: usize,
 ) -> MCStatus {
     ffi_status(|| {
+        if rows == 0 || cols == 0 {
+            return MCStatus::InvalidArgument;
+        }
         let Some(vectors) = (unsafe { slice_from_ptr(vectors, rows.saturating_mul(cols)) }) else {
             return MCStatus::Null;
         };

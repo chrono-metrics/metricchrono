@@ -25,8 +25,10 @@ This repository contains:
   and minimal consensus tick field.
 - `metricchrono-ffi`: a C ABI over the allocation-free hot paths and the basic
   event log.
-- `bindings/python`: a thin `ctypes` wrapper over the shared library.
-- `bindings/js`: a zero-dependency JS reference wrapper with a WASM-loader hook.
+- `bindings/python`: production Python bindings over the bundled C ABI shared
+  library.
+- `bindings/js`: dependency-free production JavaScript bindings with optional
+  WASM interop.
 
 Product-specific deployment tooling, hosted services, and organization-specific
 integrations are out of scope for this repository.

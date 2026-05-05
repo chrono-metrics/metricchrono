@@ -52,16 +52,20 @@ The package currently publishes as `@metricchrono/core`.
 
 ## Python
 
-Build a wheel from the repository root:
+Build and verify the source distribution and platform wheel from the repository
+root:
 
 ```sh
-python3 -m pip wheel bindings/python --no-deps -w /tmp/metricchrono-wheel
+python3 -m pip install build
+python3 -m build bindings/python --sdist --outdir /tmp/metricchrono-sdist
+python3 -m pip wheel /tmp/metricchrono-sdist/metricchrono-0.1.0.tar.gz --no-deps -w /tmp/metricchrono-wheel
 python3 -m pip install --force-reinstall /tmp/metricchrono-wheel/metricchrono-0.1.0-*.whl
 python3 -c "import metricchrono as mc; print(mc.tick_distance(1.2, mc.Tier(0.5, 1.0, 0.5, 1.0)))"
 ```
 
+The source distribution vendors the Rust workspace needed by the Python build.
 The wheel build runs Cargo and bundles the platform `metricchrono-ffi` shared
-library. Source installs therefore require Cargo.
+library. Source installs therefore require Cargo and a Rust toolchain.
 
 ## Benchmarks
 

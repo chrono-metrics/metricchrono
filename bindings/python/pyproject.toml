@@ -1,15 +1,26 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=80", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "metricchrono"
 version = "0.1.0"
-description = "Thin Python ctypes wrapper for the MetricChrono Rust C ABI"
+description = "Python bindings for the MetricChrono Rust C ABI"
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 authors = [{ name = "MetricChrono contributors" }]
+keywords = ["metricchrono", "time", "metrics", "ffi", "signal"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering",
+    "Typing :: Typed",
+]
 
 [project.urls]
 Homepage = "https://github.com/chrono-metrics/metricchrono"
@@ -21,4 +32,4 @@ where = ["."]
 include = ["metricchrono"]
 
 [tool.setuptools.package-data]
-metricchrono = ["*.dylib", "*.so", "*.dll"]
+metricchrono = ["*.dylib", "*.so", "*.dll", "py.typed"]

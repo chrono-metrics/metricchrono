@@ -1,20 +1,43 @@
 {
   "name": "@metricchrono/core",
   "version": "0.1.0",
-  "description": "Zero-dependency JS reference wrapper for the MetricChrono public kernel",
+  "description": "Production JavaScript bindings for the MetricChrono public kernel",
   "type": "module",
   "license": "Apache-2.0",
+  "homepage": "https://github.com/chrono-metrics/metricchrono#readme",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/chrono-metrics/metricchrono.git",
     "directory": "bindings/js"
   },
+  "bugs": {
+    "url": "https://github.com/chrono-metrics/metricchrono/issues"
+  },
+  "keywords": [
+    "metricchrono",
+    "time",
+    "metrics",
+    "signal",
+    "event-log"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "sideEffects": false,
   "files": [
     "src",
     "README.md"
   ],
-  "exports": "./src/index.js",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js"
+    }
+  },
   "types": "./src/index.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "test": "node test/golden.mjs"
   }

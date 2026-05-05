@@ -2,7 +2,34 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { geometricLadder, ladderDistance, tickDistance, tier, weightedConsensus } from "../src/index.js";
+import {
+  EventLog,
+  Normalization,
+  PromotionCounter,
+  adaptiveLadderDistance,
+  adaptiveZoomWindow,
+  carryRules,
+  coherenceResidual,
+  coherenceResiduals,
+  cosineDistance,
+  diagonalMahalanobisDistance,
+  euclideanDistance,
+  geometricLadder,
+  jensenShannonDistance,
+  kullbackLeiblerDistance,
+  ladderDistance,
+  ladderPair,
+  manhattanDistance,
+  normalizeTicks,
+  simpleWeightUpdate,
+  smoothLadderDistance,
+  smoothTickDistance,
+  squaredEuclideanDistance,
+  tickDistance,
+  tickPair,
+  tier,
+  weightedConsensus,
+} from "../src/index.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../crates/metricchrono-core");
 const eps = 1e-12;
@@ -29,7 +56,68 @@ for (const row of readCsv("fixtures/golden_ladders.csv").slice(1)) {
   }
 }
 
-assert.deepEqual(weightedConsensus([[1, 2], [3, 0]], [0.25, 0.75]), [2.5, 0.5]);
+const ladder = geometricLadder(0.5, 0.5, 2.0, 4, 0.5, 1.0);
+assert.equal(smoothTickDistance(0.95, tier(1.0, 2.0, 0.5, 1.0), 10.0) > 0, true);
+assert.equal(smoothLadderDistance(2.0, ladder, 10.0).length, 4);
+assert.deepEqual(normalizeTicks([10, 5, 3], Normalization.UnitMax), [1, 0.5, 0.3]);
+assert.deepEqual(carryRules([0.1, 1.2, 3.0]), [1, 2, 3]);
+
+const promote = new PromotionCounter([2, 3]);
+assert.deepEqual(promote.step([false, false]), [false, false]);
+assert.deepEqual(promote.counters, [1, 1]);
+assert.deepEqual(promote.step([false, false]), [true, true]);
+assert.deepEqual(promote.counters, [0, 0]);
+
+const adaptive = adaptiveLadderDistance(0.75, ladder);
+assert.equal(adaptive.decision.firstInactiveTier, 1);
+assert.equal(adaptive.decision.stoppedEarly, true);
+assert.deepEqual(adaptive.ticks.slice(1), [0, 0, 0]);
+assert.deepEqual(adaptiveZoomWindow(3.0, ladder, 1), [1, 4]);
+
+const log = new EventLog(3);
+assert.equal(log.append("s0", [0, 0, 0]), 0);
+assert.equal(log.append("s1", [1, 0, 0]), 1);
+assert.equal(log.append("s2", [0, 2, 0]), 2);
+assert.equal(log.append("s3", [1, 1, 0]), 3);
+assert.equal(log.firstEvent(0), 1);
+assert.equal(log.nextEvent(1, 0), 3);
+assert.deepEqual(
+  Array.from(log.iterEvents(0), ([index]) => index),
+  [1, 3],
+);
+assert.deepEqual(log.compactSummary(1).map((item) => item.stateId), ["s2", "s3"]);
+
+const consensus = weightedConsensus(
+  [
+    [1, 2],
+    [3, 0],
+  ],
+  [0.25, 0.75],
+);
+assert.deepEqual(consensus, [2.5, 0.5]);
+assert.equal(coherenceResidual([1, 2], consensus) > 0, true);
+const residuals = coherenceResiduals(
+  [
+    [1, 2],
+    [3, 0],
+  ],
+  consensus,
+);
+assertClose("updated weights sum", simpleWeightUpdate([0.5, 0.5], residuals, 0.2, 0.01).reduce(sum, 0), 1);
+
+assertClose("euclidean", euclideanDistance([0, 0], [3, 4]), 5);
+assertClose("squaredEuclidean", squaredEuclideanDistance([0, 0], [3, 4]), 25);
+assertClose("manhattan", manhattanDistance([0, 0], [3, 4]), 7);
+assertClose("cosine", cosineDistance([1, 0], [0, 1]), 1);
+assert.equal(kullbackLeiblerDistance([0.2, 0.8], [0.5, 0.5]) > 0, true);
+assert.equal(jensenShannonDistance([0.2, 0.8], [0.5, 0.5]) > 0, true);
+assertClose(
+  "diagonalMahalanobis",
+  diagonalMahalanobisDistance([0, 0], [4, 3], [0.25, 1.0]),
+  Math.sqrt(13),
+);
+assertClose("tickPair", tickPair([0, 0], [3, 4], euclideanDistance, tier(0.5, 0.5, 0, 1)), 10);
+assert.deepEqual(ladderPair([0, 0], [3, 4], euclideanDistance, ladder).length, 4);
 
 function readCsv(path) {
   return readFileSync(resolve(root, path), "utf8")
@@ -44,4 +132,8 @@ function number(value) {
 
 function assertClose(name, actual, expected) {
   assert.ok(Math.abs(actual - expected) <= eps, `${name}: expected ${expected}, got ${actual}`);
+}
+
+function sum(left, right) {
+  return left + right;
 }

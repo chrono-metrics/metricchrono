@@ -1,17 +1,58 @@
 # MetricChrono JS
 
-This package gives browser and Node users the same public kernel shape as the
-Rust crate.
+Production JavaScript bindings for the MetricChrono public kernel. The package
+is dependency-free, typed, and works in Node and modern browsers.
 
-It includes:
+## Install From Source
 
-- A zero-dependency JS reference implementation for golden tests and lightweight
-  browser use.
-- `loadWasmMetricChrono`, a tiny loader for a future `wasm32` build that exports
-  `mc_tick_distance_raw`.
+```sh
+npm install ./bindings/js
+```
 
-Run the golden test:
+## Example
+
+```js
+import {
+  EventLog,
+  geometricLadder,
+  ladderDistance,
+  tier,
+  tickDistance,
+  weightedConsensus,
+} from "@metricchrono/core";
+
+const t = tier(0.5, 1.0, 0.5, 1.0);
+console.log(tickDistance(1.2, t));
+
+const ladder = geometricLadder(0.5, 0.5, 2.0, 4, 0.5, 1.0);
+console.log(ladderDistance(3.0, ladder));
+
+const log = new EventLog(2);
+log.append("s0", [0, 0]);
+log.append("s1", [1, 0]);
+
+console.log(weightedConsensus([[1, 2], [3, 0]], [0.25, 0.75]));
+```
+
+## API Surface
+
+- Kernel and ladders: `tier`, `tickDistance`, `ladderDistance`,
+  `geometricLadder`, `customLadder`, `validateLadder`.
+- Smooth and adaptive helpers: `smoothTickDistance`, `smoothLadderDistance`,
+  `adaptiveLadderDistance`, `adaptiveZoomWindow`.
+- Event memory: `EventLog`.
+- Carry and normalization: `PromotionCounter`, `carryRules`,
+  `normalizeTicks`.
+- Metrics: Euclidean, squared Euclidean, Manhattan, cosine, KL-like,
+  Jensen-Shannon, diagonal Mahalanobis, `tickPair`, and `ladderPair`.
+- Consensus: `weightedConsensus`, `coherenceResiduals`, and
+  `simpleWeightUpdate`.
+- Optional interop: `loadWasmMetricChrono` can wrap a compatible WASM module
+  that exports `mc_tick_distance_raw`.
+
+## Verify
 
 ```sh
 npm test
+npm pack --dry-run
 ```

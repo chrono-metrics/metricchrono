@@ -52,6 +52,39 @@ def test_ladders() -> None:
                 assert_close(f"{row['name']}[{index}]", left, right)
 
 
+def test_public_api_surface() -> None:
+    ladder = mc.geometric_ladder(0.5, 0.5, 2.0, 4, 0.5, 1.0)
+    values = mc.ladder_distance(3.0, ladder)
+    assert len(values) == 4
+    assert values[0] > values[1] > values[2] > values[3]
+
+    smooth = mc.smooth_ladder_distance(3.0, ladder, 10.0)
+    assert len(smooth) == 4
+    assert all(value > 0.0 for value in smooth)
+
+    early, decision = mc.adaptive_ladder_distance(0.75, ladder)
+    assert early[0] > 0.0
+    assert early[1:] == [0.0, 0.0, 0.0]
+    assert decision.first_inactive_tier == 1
+    assert decision.stopped_early
+
+    consensus = mc.weighted_consensus([[1.0, 2.0], [3.0, 0.0]], [0.25, 0.75])
+    assert consensus == [2.5, 0.5]
+    residuals = mc.coherence_residuals([[1.0, 2.0], [3.0, 0.0]], consensus)
+    weights = [0.5, 0.5]
+    updated = mc.simple_weight_update(weights, residuals, 0.2, 0.01)
+    assert weights == updated
+    assert_close("updated weights sum", sum(updated), 1.0)
+
+    with mc.EventLog(2) as log:
+        assert log.append(10, [1.0, 0.0]) == 0
+        assert log.append(11, [1.0, 1.0]) == 1
+        assert len(log) == 2
+        assert log.next_event(0, 0) == 1
+        assert log.next_event(0, 1) is None
+
+
 if __name__ == "__main__":
     test_ticks()
     test_ladders()
+    test_public_api_surface()
