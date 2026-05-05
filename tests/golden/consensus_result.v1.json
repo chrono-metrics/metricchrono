@@ -1,0 +1,6 @@
+{
+  "metricchrono_schema": "consensus_result.v1",
+  "consensus": [2.5, 0.5],
+  "residuals": [1.5, 0.5],
+  "weights": [0.45, 0.55]
+}

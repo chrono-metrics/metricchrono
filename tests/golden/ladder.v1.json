@@ -1,0 +1,8 @@
+{
+  "metricchrono_schema": "ladder.v1",
+  "tiers": [
+    { "epsilon": 0.03, "delta": 0.1, "p": 0.0, "epsilon_ref": 1.0 },
+    { "epsilon": 0.1, "delta": 0.3, "p": 0.0, "epsilon_ref": 1.0 },
+    { "epsilon": 0.3, "delta": 0.9, "p": 0.0, "epsilon_ref": 1.0 }
+  ]
+}

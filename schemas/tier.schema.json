@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chrono-metrics/metricchrono/schemas/tier.schema.json",
+  "title": "MetricChrono Tier",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["metricchrono_schema", "epsilon", "delta", "p", "epsilon_ref"],
+  "properties": {
+    "metricchrono_schema": { "const": "tier.v1" },
+    "epsilon": { "type": "number", "exclusiveMinimum": 0 },
+    "delta": { "type": "number", "exclusiveMinimum": 0 },
+    "p": { "type": "number" },
+    "epsilon_ref": { "type": "number", "exclusiveMinimum": 0 }
+  }
+}

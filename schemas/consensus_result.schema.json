@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chrono-metrics/metricchrono/schemas/consensus_result.schema.json",
+  "title": "MetricChrono ConsensusResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["metricchrono_schema", "consensus", "residuals", "weights"],
+  "properties": {
+    "metricchrono_schema": { "const": "consensus_result.v1" },
+    "consensus": {
+      "type": "array",
+      "items": { "type": "number" }
+    },
+    "residuals": {
+      "type": "array",
+      "items": { "type": "number", "minimum": 0 }
+    },
+    "weights": {
+      "type": "array",
+      "items": { "type": "number", "minimum": 0 }
+    }
+  }
+}

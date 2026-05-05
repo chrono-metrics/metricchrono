@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chrono-metrics/metricchrono/schemas/tick_vector.schema.json",
+  "title": "MetricChrono TickVector",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["metricchrono_schema", "ticks"],
+  "properties": {
+    "metricchrono_schema": { "const": "tick_vector.v1" },
+    "ticks": {
+      "type": "array",
+      "items": { "type": "number" }
+    }
+  }
+}

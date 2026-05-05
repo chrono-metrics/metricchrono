@@ -1,7 +1,8 @@
 # MetricChrono
 
-MetricChrono is a deterministic Rust implementation of the epsilon-delta-p tick
-primitive and its multiscale ladder representation.
+MetricChrono is a deterministic implementation of the epsilon-delta-p tick
+primitive and its multiscale ladder representation: a compact metric-change
+ledger for measured state differences.
 
 It turns raw distances between states, events, embeddings, or signals into a
 compact multiscale tick code:
@@ -17,6 +18,9 @@ Use MetricChrono when wall-clock time is the wrong feature and you need a
 deterministic answer to: "what changed, and at what scale?" Typical inputs are
 vector embeddings, telemetry windows, simulation states, robot observations,
 log-derived features, or any domain object with a distance metric.
+
+MetricChrono does not replace clocks, causal models, planners, or controllers.
+It is non-additive and encodes measured change, not elapsed physical time.
 
 This repository contains:
 
@@ -108,6 +112,17 @@ This repository is designed to publish in ordered layers: Rust core first, then
 the Rust FFI crate, then language wrappers. The full checklist is in
 [docs/release.md](docs/release.md). In particular, `metricchrono-ffi` cannot be
 published until `metricchrono-core` is already visible in the crates.io index.
+
+## Documentation
+
+- [Specification](docs/spec.md)
+- [Edge cases](docs/edge-cases.md)
+- [Limitations](docs/limitations.md)
+- [Basic calibration](docs/calibration-basic.md)
+- [Enterprise boundary](docs/enterprise-boundary.md)
+- [Rust API](docs/api-rust.md)
+- [Python API](docs/api-python.md)
+- [WASM / JavaScript API](docs/api-wasm.md)
 
 ## Public API Surface
 
