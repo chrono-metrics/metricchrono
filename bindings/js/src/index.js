@@ -89,6 +89,69 @@ export function geometricLadder(epsilon0, delta0, ratio, tiers, p = 0.5, epsilon
   );
 }
 
+export function tierFromSchema(document) {
+  ensureSchema(document, "tier.v1");
+  return tier(document.epsilon, document.delta, document.p, document.epsilon_ref);
+}
+
+export function tierToSchema(tierSpec) {
+  validateTier(tierSpec);
+  return {
+    metricchrono_schema: "tier.v1",
+    epsilon: tierSpec.epsilon,
+    delta: tierSpec.delta,
+    p: tierSpec.p,
+    epsilon_ref: tierSpec.epsilonRef,
+  };
+}
+
+export function ladderFromSchema(document) {
+  ensureSchema(document, "ladder.v1");
+  return customLadder(
+    document.tiers.map((item) => ({
+      epsilon: item.epsilon,
+      delta: item.delta,
+      p: item.p,
+      epsilonRef: item.epsilon_ref,
+    })),
+  );
+}
+
+export function ladderToSchema(ladder) {
+  validateLadder(ladder);
+  return {
+    metricchrono_schema: "ladder.v1",
+    tiers: ladder.map((tierSpec) => ({
+      epsilon: tierSpec.epsilon,
+      delta: tierSpec.delta,
+      p: tierSpec.p,
+      epsilon_ref: tierSpec.epsilonRef,
+    })),
+  };
+}
+
+export function tickVectorFromSchema(document) {
+  ensureSchema(document, "tick_vector.v1");
+  return document.ticks.slice();
+}
+
+export function tickVectorToSchema(ticks) {
+  return {
+    metricchrono_schema: "tick_vector.v1",
+    ticks: ticks.slice(),
+  };
+}
+
+export function consensusResultFromSchema(document) {
+  ensureSchema(document, "consensus_result.v1");
+  return {
+    metricchrono_schema: "consensus_result.v1",
+    consensus: document.consensus.slice(),
+    residuals: document.residuals.slice(),
+    weights: document.weights.slice(),
+  };
+}
+
 export function smoothTickDistance(distance, tierSpec, sharpness) {
   validateTier(tierSpec);
   if (!Number.isFinite(sharpness) || sharpness <= 0) {
@@ -542,6 +605,12 @@ function divergenceInputs(a, b, epsilon) {
     throw new MetricChronoError("divergence inputs must be non-empty and epsilon must be > 0");
   }
   return [normalizeProbabilities(a, epsilon), normalizeProbabilities(b, epsilon)];
+}
+
+function ensureSchema(document, expected) {
+  if (document.metricchrono_schema !== expected) {
+    throw new MetricChronoError(`expected schema ${expected}`);
+  }
 }
 
 function normalizeProbabilities(values, epsilon) {

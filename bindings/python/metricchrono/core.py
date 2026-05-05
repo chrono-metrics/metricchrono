@@ -8,7 +8,7 @@ from collections.abc import Iterable, MutableSequence, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Mapping, Optional, Union
 
 MC_STATUS_OK = 0
 MC_STATUS_NULL = 1
@@ -271,6 +271,76 @@ def geometric_ladder(
     return [_from_tier(value) for value in out]
 
 
+def tier_from_schema(document: Mapping[str, Any]) -> Tier:
+    _ensure_schema(document, "tier.v1")
+    return Tier(
+        float(document["epsilon"]),
+        float(document["delta"]),
+        float(document["p"]),
+        float(document["epsilon_ref"]),
+    )
+
+
+def tier_to_schema(value: Tier) -> dict[str, Union[float, str]]:
+    return {
+        "metricchrono_schema": "tier.v1",
+        "epsilon": value.epsilon,
+        "delta": value.delta,
+        "p": value.p,
+        "epsilon_ref": value.epsilon_ref,
+    }
+
+
+def ladder_from_schema(document: Mapping[str, Any]) -> list[Tier]:
+    _ensure_schema(document, "ladder.v1")
+    return [
+        Tier(
+            float(item["epsilon"]),
+            float(item["delta"]),
+            float(item["p"]),
+            float(item["epsilon_ref"]),
+        )
+        for item in document["tiers"]
+    ]
+
+
+def ladder_to_schema(tiers: Sequence[Tier]) -> dict[str, Any]:
+    return {
+        "metricchrono_schema": "ladder.v1",
+        "tiers": [
+            {
+                "epsilon": tier.epsilon,
+                "delta": tier.delta,
+                "p": tier.p,
+                "epsilon_ref": tier.epsilon_ref,
+            }
+            for tier in tiers
+        ],
+    }
+
+
+def tick_vector_from_schema(document: Mapping[str, Any]) -> list[float]:
+    _ensure_schema(document, "tick_vector.v1")
+    return [float(value) for value in document["ticks"]]
+
+
+def tick_vector_to_schema(ticks: Sequence[float]) -> dict[str, Any]:
+    return {
+        "metricchrono_schema": "tick_vector.v1",
+        "ticks": [float(value) for value in ticks],
+    }
+
+
+def consensus_result_from_schema(document: Mapping[str, Any]) -> dict[str, Union[list[float], str]]:
+    _ensure_schema(document, "consensus_result.v1")
+    return {
+        "metricchrono_schema": "consensus_result.v1",
+        "consensus": [float(value) for value in document["consensus"]],
+        "residuals": [float(value) for value in document["residuals"]],
+        "weights": [float(value) for value in document["weights"]],
+    }
+
+
 def smooth_tick_distance(distance: float, tier: Tier, sharpness: float) -> float:
     out = ctypes.c_double()
     status = _load_library().mc_smooth_tick_distance(
@@ -459,3 +529,8 @@ def _sanitize_signed(value: float) -> float:
     if value == -math.inf:
         return -sys.float_info.max
     return float(value)
+
+
+def _ensure_schema(document: Mapping[str, Any], expected: str) -> None:
+    if document.get("metricchrono_schema") != expected:
+        raise ValueError(f"expected schema {expected}")

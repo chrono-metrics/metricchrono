@@ -38,6 +38,9 @@ console.log(weightedConsensus([[1, 2], [3, 0]], [0.25, 0.75]));
 
 - Kernel and ladders: `tier`, `tickDistance`, `ladderDistance`,
   `geometricLadder`, `customLadder`, `validateLadder`.
+- Serialization: `tierFromSchema`, `tierToSchema`, `ladderFromSchema`,
+  `ladderToSchema`, `tickVectorFromSchema`, `tickVectorToSchema`,
+  `consensusResultFromSchema`.
 - Smooth and adaptive helpers: `smoothTickDistance`, `smoothLadderDistance`,
   `adaptiveLadderDistance`, `adaptiveZoomWindow`.
 - Event memory: `EventLog`.

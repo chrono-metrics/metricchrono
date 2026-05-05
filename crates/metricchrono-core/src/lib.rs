@@ -9,6 +9,7 @@ mod error;
 mod event_log;
 mod ladder;
 mod metrics;
+mod schema;
 mod smooth;
 mod tier;
 mod zoom;
@@ -28,6 +29,7 @@ pub use metrics::{
     ladder_pair, tick_pair, Cosine, DiagonalMahalanobis, Euclidean, JensenShannon, KullbackLeibler,
     Manhattan, Metric, MetricFn, SquaredEuclidean,
 };
+pub use schema::{ConsensusResultDocument, LadderDocument, TickVectorDocument, TierDocument};
 pub use smooth::{
     smooth_ladder_distance, smooth_ladder_values, smooth_tick_distance, SmoothParams,
 };

@@ -51,6 +51,15 @@ Golden-vector tests use an absolute tolerance of `1e-12`. Checked APIs reject
 negative, NaN, and infinite distances. Unchecked hot-path helpers assume valid
 inputs and are intended for callers that already validated data.
 
+## Serialization
+
+Versioned JSON Schemas for `Tier`, `Ladder`, `TickVector`, and
+`ConsensusResult` live in `schemas/`. Rust uses Serde document types that reject
+unknown fields. Python and JavaScript helpers project the documented fields and
+explicitly ignore unknown extension fields after checking `metricchrono_schema`.
+Cross-field validation such as `epsilon < delta` is enforced by the public API
+constructors rather than JSON Schema.
+
 ## Golden Vectors
 
 Single-scale manuscript vector:

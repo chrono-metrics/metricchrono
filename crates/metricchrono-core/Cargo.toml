@@ -15,6 +15,12 @@ authors.workspace = true
 [lib]
 name = "metricchrono_core"
 
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1"
+
 [[bench]]
 name = "ladder_throughput"
 harness = false

@@ -50,6 +50,30 @@ export function geometricLadder(
   p?: number,
   epsilonRef?: number,
 ): Tier[];
+export function tierFromSchema(document: unknown): Tier;
+export function tierToSchema(tierSpec: Tier): {
+  metricchrono_schema: "tier.v1";
+  epsilon: number;
+  delta: number;
+  p: number;
+  epsilon_ref: number;
+};
+export function ladderFromSchema(document: unknown): Tier[];
+export function ladderToSchema(ladder: readonly Tier[]): {
+  metricchrono_schema: "ladder.v1";
+  tiers: Array<{ epsilon: number; delta: number; p: number; epsilon_ref: number }>;
+};
+export function tickVectorFromSchema(document: unknown): number[];
+export function tickVectorToSchema(ticks: readonly number[]): {
+  metricchrono_schema: "tick_vector.v1";
+  ticks: number[];
+};
+export function consensusResultFromSchema(document: unknown): {
+  metricchrono_schema: "consensus_result.v1";
+  consensus: number[];
+  residuals: number[];
+  weights: number[];
+};
 export function smoothTickDistance(distance: number, tierSpec: Tier, sharpness: number): number;
 export function smoothLadderDistance(
   distance: number,

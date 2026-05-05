@@ -1,7 +1,9 @@
 use crate::{MetricChronoError, Result};
+use serde::{Deserialize, Serialize};
 
 /// One epsilon-delta-p comparator tier.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Tier {
     pub epsilon: f64,
     pub delta: f64,

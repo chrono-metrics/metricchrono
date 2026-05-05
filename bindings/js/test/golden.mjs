@@ -11,13 +11,16 @@ import {
   carryRules,
   coherenceResidual,
   coherenceResiduals,
+  consensusResultFromSchema,
   cosineDistance,
   diagonalMahalanobisDistance,
   euclideanDistance,
   geometricLadder,
   jensenShannonDistance,
   kullbackLeiblerDistance,
+  ladderFromSchema,
   ladderDistance,
+  ladderToSchema,
   ladderPair,
   manhattanDistance,
   normalizeTicks,
@@ -26,12 +29,17 @@ import {
   smoothTickDistance,
   squaredEuclideanDistance,
   tickDistance,
+  tickVectorFromSchema,
+  tickVectorToSchema,
   tickPair,
   tier,
+  tierFromSchema,
+  tierToSchema,
   weightedConsensus,
 } from "../src/index.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../crates/metricchrono-core");
+const repoRoot = resolve(root, "../..");
 const eps = 1e-12;
 
 for (const row of readCsv("fixtures/golden_ticks.csv").slice(1)) {
@@ -121,11 +129,40 @@ assert.throws(() => tier(1.0, 1.0, 0, 1));
 assert.throws(() => tickDistance(-1, tier(0.5, 1.0, 0, 1)));
 assert.deepEqual(ladderPair([0, 0], [3, 4], euclideanDistance, ladder).length, 4);
 
+const tierDoc = {
+  metricchrono_schema: "tier.v1",
+  epsilon: 0.03,
+  delta: 0.1,
+  p: 0.0,
+  epsilon_ref: 1.0,
+};
+const schemaTier = tierFromSchema(tierDoc);
+assert.deepEqual(tierToSchema(schemaTier), tierDoc);
+
+const ladderDoc = readJson("tests/golden/ladder.v1.json");
+const schemaLadder = ladderFromSchema(ladderDoc);
+assert.deepEqual(ladderDistance(1.0, schemaLadder), [10, 4, 2]);
+assert.deepEqual(ladderToSchema(schemaLadder), ladderDoc);
+
+const tickDoc = readJson("tests/golden/tick_vector.v1.json");
+const schemaTicks = tickVectorFromSchema(tickDoc);
+assert.deepEqual(schemaTicks, [10, 4, 2]);
+assert.deepEqual(tickVectorToSchema(schemaTicks), tickDoc);
+
+const consensusDoc = readJson("tests/golden/consensus_result.v1.json");
+assert.deepEqual(consensusResultFromSchema(consensusDoc), consensusDoc);
+
+assert.throws(() => ladderFromSchema({ ...ladderDoc, metricchrono_schema: "ladder.v2" }));
+
 function readCsv(path) {
   return readFileSync(resolve(root, path), "utf8")
     .trim()
     .split("\n")
     .map((line) => line.split(","));
+}
+
+function readJson(path) {
+  return JSON.parse(readFileSync(resolve(repoRoot, path), "utf8"));
 }
 
 function number(value) {

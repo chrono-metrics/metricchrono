@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 
 import metricchrono as mc
@@ -98,7 +99,26 @@ def test_public_api_surface() -> None:
         raise AssertionError("epsilon >= delta should raise")
 
 
+def test_schema_round_trip() -> None:
+    with (ROOT.parents[1] / "tests/golden/ladder.v1.json").open() as handle:
+        ladder_doc = json.load(handle)
+    ladder = mc.ladder_from_schema(ladder_doc)
+    assert mc.ladder_distance(1.0, ladder) == [10.0, 4.0, 2.0]
+    assert mc.ladder_to_schema(ladder) == ladder_doc
+
+    with (ROOT.parents[1] / "tests/golden/tick_vector.v1.json").open() as handle:
+        tick_doc = json.load(handle)
+    ticks = mc.tick_vector_from_schema(tick_doc)
+    assert ticks == [10.0, 4.0, 2.0]
+    assert mc.tick_vector_to_schema(ticks) == tick_doc
+
+    with (ROOT.parents[1] / "tests/golden/consensus_result.v1.json").open() as handle:
+        consensus_doc = json.load(handle)
+    assert mc.consensus_result_from_schema(consensus_doc) == consensus_doc
+
+
 if __name__ == "__main__":
     test_ticks()
     test_ladders()
     test_public_api_surface()
+    test_schema_round_trip()

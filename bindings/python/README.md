@@ -46,6 +46,9 @@ with mc.EventLog(2) as log:
 
 - Kernel and ladders: `Tier`, `tick_distance`, `ladder_distance`,
   `geometric_ladder`.
+- Serialization: `tier_from_schema`, `tier_to_schema`, `ladder_from_schema`,
+  `ladder_to_schema`, `tick_vector_from_schema`, `tick_vector_to_schema`,
+  `consensus_result_from_schema`.
 - Smooth and adaptive helpers: `smooth_tick_distance`,
   `smooth_ladder_distance`, `adaptive_ladder_distance`, `ZoomDecision`.
 - Event memory: `EventLog`.
