@@ -15,11 +15,11 @@ mod tier;
 mod zoom;
 
 pub use consensus::{
-    coherence_residual, coherence_residuals, simple_weight_update, weighted_consensus,
-    ConsensusResult,
+    coherence_residual, coherence_residuals, simple_weight_update, tier_residuals,
+    weighted_consensus, weighted_consensus_tierwise, ConsensusInput, ConsensusResult, SourceTick,
 };
 pub use error::{MetricChronoError, Result};
-pub use event_log::{EventLog, EventRecord, EventSummary, TierEventIter};
+pub use event_log::{EventId, EventLog, EventRecord, EventSummary, TierEventIter};
 pub use ladder::{
     carry_rules, custom_ladder, geometric_ladder, ladder_distance, ladder_values, normalize_ticks,
     tick_distance, try_tick_distance, validate_ladder, Ladder, Normalization, PromotionCounter,

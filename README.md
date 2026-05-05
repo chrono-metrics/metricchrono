@@ -146,6 +146,7 @@ The public core is deliberately small:
 - `adaptive_ladder_distance` and `adaptive_zoom_window` expose early-stop and
   zoom helpers for edge and embedded use.
 - `weighted_consensus`, `coherence_residuals`, and `simple_weight_update`
-  provide a minimal consensus tick field.
+  provide a minimal consensus tick field. `weighted_consensus_tierwise` is
+  available when callers need explicit source x tier reliability weights.
 
 See [docs/scope.md](docs/scope.md) for the repository scope.

@@ -1,6 +1,9 @@
 use crate::ladder::{ensure_shape, sanitize_signed};
 use crate::{MetricChronoError, Result};
 
+/// Stable event identifier within an [`EventLog`].
+pub type EventId = usize;
+
 /// One event-log record.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EventRecord<S = u64> {
@@ -12,7 +15,7 @@ pub struct EventRecord<S = u64> {
 /// Compact summary item for a tier.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EventSummary<S = u64> {
-    pub index: usize,
+    pub index: EventId,
     pub state_id: S,
     pub tick: f64,
 }
@@ -55,13 +58,17 @@ impl<S> EventLog<S> {
         &self.records
     }
 
-    pub fn record(&self, index: usize) -> Option<&EventRecord<S>> {
+    pub fn record(&self, index: EventId) -> Option<&EventRecord<S>> {
         self.records.get(index)
+    }
+
+    pub fn get(&self, index: EventId) -> Option<&EventRecord<S>> {
+        self.record(index)
     }
 
     /// Append a record. A positive finite tick at tier `k` becomes an event at
     /// tier `k` and updates the skip pointer from the previous event.
-    pub fn append(&mut self, state_id: S, tick_vector: impl Into<Vec<f64>>) -> Result<usize> {
+    pub fn append(&mut self, state_id: S, tick_vector: impl Into<Vec<f64>>) -> Result<EventId> {
         let ticks = tick_vector.into();
         ensure_shape(self.tier_count, ticks.len(), "tick vector")?;
 
@@ -87,7 +94,7 @@ impl<S> EventLog<S> {
         Ok(index)
     }
 
-    pub fn next_event(&self, index: usize, tier: usize) -> Option<usize> {
+    pub fn next_event(&self, index: EventId, tier: usize) -> Option<EventId> {
         self.records
             .get(index)
             .and_then(|record| record.next_event.get(tier))
@@ -95,7 +102,7 @@ impl<S> EventLog<S> {
             .flatten()
     }
 
-    pub fn first_event(&self, tier: usize) -> Option<usize> {
+    pub fn first_event(&self, tier: usize) -> Option<EventId> {
         self.first_by_tier.get(tier).copied().flatten()
     }
 

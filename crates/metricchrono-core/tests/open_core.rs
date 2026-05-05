@@ -2,10 +2,11 @@ use metricchrono_core::{
     adaptive_ladder_distance, adaptive_zoom_window, carry_rules, coherence_residual,
     coherence_residuals, custom_ladder, geometric_ladder, ladder_distance, ladder_pair,
     ladder_values, normalize_ticks, simple_weight_update, smooth_ladder_values,
-    smooth_tick_distance, tick_distance, tick_pair, try_tick_distance, validate_ladder,
-    weighted_consensus, zoom_ladder_distance, Absolute, DiagonalMahalanobis, Euclidean, EventLog,
-    JensenShannon, KullbackLeibler, Ladder, Metric, MetricChronoError, Normalization,
-    PromotionCounter, SmoothParams, Tier, ZoomPolicy,
+    smooth_tick_distance, tick_distance, tick_pair, tier_residuals, try_tick_distance,
+    validate_ladder, weighted_consensus, weighted_consensus_tierwise, zoom_ladder_distance,
+    Absolute, ConsensusInput, DiagonalMahalanobis, Euclidean, EventId, EventLog, JensenShannon,
+    KullbackLeibler, Ladder, Metric, MetricChronoError, Normalization, PromotionCounter,
+    SmoothParams, Tier, ZoomPolicy,
 };
 
 #[test]
@@ -159,7 +160,9 @@ fn carry_rules_and_promotion_counter_match_reference_behavior() {
 fn event_log_tracks_tier_local_next_events() {
     let mut log = EventLog::new(3).unwrap();
     assert!(log.is_empty());
-    assert_eq!(log.append("s0", vec![0.0, 0.0, 0.0]).unwrap(), 0);
+    let first_id: EventId = log.append("s0", vec![0.0, 0.0, 0.0]).unwrap();
+    assert_eq!(first_id, 0);
+    assert_eq!(log.get(first_id).unwrap().state_id, "s0");
     assert_eq!(log.append("s1", vec![1.0, 0.0, 0.0]).unwrap(), 1);
     assert_eq!(log.append("s2", vec![0.0, 2.0, 0.0]).unwrap(), 2);
     assert_eq!(log.append("s3", vec![1.0, 1.0, 0.0]).unwrap(), 3);
@@ -230,6 +233,21 @@ fn minimal_consensus_computes_residuals_and_weight_updates() {
 
     let mut residuals = [0.0; 2];
     coherence_residuals(&[&a, &b], &consensus, &mut residuals).unwrap();
+    let mut per_tier = [0.0; 3];
+    tier_residuals(&a, &consensus, &mut per_tier).unwrap();
+    assert_eq!(per_tier, [1.5, 1.5, 0.0]);
+
+    let tier_weights_a = [1.0, 0.1, 1.0];
+    let tier_weights_b = [0.1, 1.0, 1.0];
+    let tierwise = ConsensusInput {
+        tick_vectors: &[&a, &b],
+        tier_weights: &[&tier_weights_a, &tier_weights_b],
+    };
+    let mut tier_consensus = [0.0; 3];
+    weighted_consensus_tierwise(tierwise, &mut tier_consensus).unwrap();
+    assert!(tier_consensus[0] < 1.5);
+    assert!(tier_consensus[1] < 1.0);
+
     let mut weights = [0.5, 0.5];
     simple_weight_update(&mut weights, &residuals, 0.2, 0.01).unwrap();
     assert!((weights.iter().sum::<f64>() - 1.0).abs() < 1e-12);

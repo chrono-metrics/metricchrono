@@ -7,6 +7,8 @@ export interface Tier {
   epsilonRef: number;
 }
 
+export type Ladder = readonly Tier[];
+
 export interface ZoomDecision {
   evaluatedTiers: number;
   firstInactiveTier: number | null;

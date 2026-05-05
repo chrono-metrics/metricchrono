@@ -425,7 +425,7 @@ def adaptive_ladder_distance(
 
 
 def weighted_consensus(vectors: Sequence[Sequence[float]], weights: Sequence[float]) -> list[float]:
-    if not vectors:
+    if len(vectors) == 0:
         raise ValueError("vectors must not be empty")
     if len(vectors) != len(weights):
         raise ValueError("weights length must match vector count")

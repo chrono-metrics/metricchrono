@@ -1,6 +1,16 @@
 use crate::ladder::{ensure_output, ensure_shape, sanitize_signed};
 use crate::{MetricChronoError, Result};
 
+/// One source-local tick vector.
+pub type SourceTick<'a> = &'a [f64];
+
+/// Source x tier inputs for tier-wise weighted consensus.
+#[derive(Clone, Copy, Debug)]
+pub struct ConsensusInput<'a> {
+    pub tick_vectors: &'a [SourceTick<'a>],
+    pub tier_weights: &'a [SourceTick<'a>],
+}
+
 /// Metadata returned by weighted consensus.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ConsensusResult {
@@ -61,6 +71,63 @@ pub fn weighted_consensus(
     })
 }
 
+/// Compute a weighted consensus tick vector with source x tier weights.
+pub fn weighted_consensus_tierwise(
+    input: ConsensusInput<'_>,
+    out: &mut [f64],
+) -> Result<ConsensusResult> {
+    if input.tick_vectors.is_empty() {
+        return Err(MetricChronoError::InvalidArgument(
+            "at least one source is required",
+        ));
+    }
+    ensure_shape(
+        input.tick_vectors.len(),
+        input.tier_weights.len(),
+        "source tier weights",
+    )?;
+    let tiers = input.tick_vectors[0].len();
+    if tiers == 0 {
+        return Err(MetricChronoError::EmptyLadder);
+    }
+    ensure_output(tiers, out.len())?;
+    out[..tiers].fill(0.0);
+
+    let mut totals = vec![0.0; tiers];
+    for (source, weights) in input.tick_vectors.iter().zip(input.tier_weights) {
+        ensure_shape(tiers, source.len(), "tick vector")?;
+        ensure_shape(tiers, weights.len(), "tier weights")?;
+        for tier in 0..tiers {
+            let weight = weights[tier];
+            if !weight.is_finite() || weight < 0.0 {
+                return Err(MetricChronoError::InvalidArgument(
+                    "weights must be finite and >= 0",
+                ));
+            }
+            if weight == 0.0 {
+                continue;
+            }
+            totals[tier] += weight;
+            out[tier] += weight * sanitize_signed(source[tier]);
+        }
+    }
+
+    for (tier, total) in totals.iter().copied().enumerate() {
+        if total <= 0.0 {
+            return Err(MetricChronoError::InvalidArgument(
+                "total consensus weight must be > 0 for every tier",
+            ));
+        }
+        out[tier] /= total;
+    }
+
+    Ok(ConsensusResult {
+        sources: input.tick_vectors.len(),
+        tiers,
+        total_weight: totals.iter().sum(),
+    })
+}
+
 /// Root-mean-square residual between one source vector and consensus.
 pub fn coherence_residual(source_tick: &[f64], consensus: &[f64]) -> Result<f64> {
     ensure_shape(consensus.len(), source_tick.len(), "coherence residual")?;
@@ -77,6 +144,19 @@ pub fn coherence_residual(source_tick: &[f64], consensus: &[f64]) -> Result<f64>
         .sum::<f64>()
         / consensus.len() as f64;
     Ok(mse.sqrt())
+}
+
+/// Compute per-tier absolute residuals for one source vector.
+pub fn tier_residuals(source_tick: &[f64], consensus: &[f64], out: &mut [f64]) -> Result<()> {
+    ensure_shape(consensus.len(), source_tick.len(), "tier residuals")?;
+    if consensus.is_empty() {
+        return Err(MetricChronoError::EmptyLadder);
+    }
+    ensure_output(consensus.len(), out.len())?;
+    for (slot, (source, center)) in out.iter_mut().zip(source_tick.iter().zip(consensus)) {
+        *slot = (sanitize_signed(*source) - sanitize_signed(*center)).abs();
+    }
+    Ok(())
 }
 
 /// Compute residuals for all sources.

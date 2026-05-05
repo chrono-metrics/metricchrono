@@ -4,6 +4,7 @@
 //! provides the publication boundary for users who only need consensus helpers.
 
 pub use metricchrono_core::{
-    coherence_residual, coherence_residuals, simple_weight_update, weighted_consensus,
-    ConsensusResult, ConsensusResultDocument,
+    coherence_residual, coherence_residuals, simple_weight_update, tier_residuals,
+    weighted_consensus, weighted_consensus_tierwise, ConsensusInput, ConsensusResult,
+    ConsensusResultDocument, SourceTick,
 };
