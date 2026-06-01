@@ -3,20 +3,24 @@
 MetricChrono is intentionally small. Contributions should keep the Rust core
 deterministic, dependency-light, and easy to bind from other languages.
 
-Before opening a pull request, run:
+Before opening a pull request, run the same verification entrypoint CI uses:
 
 ```sh
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace --all-targets
-RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps
-cargo build -p metricchrono-ffi --release
-(cd bindings/js && npm test)
-PYTHONPATH=bindings/python METRICCHRONO_FFI_LIB=target/release/libmetricchrono_ffi.dylib python3 bindings/python/tests/golden.py
+scripts/ci.sh
 ```
 
-On Linux, use `target/release/libmetricchrono_ffi.so` for
-`METRICCHRONO_FFI_LIB`.
+For a faster Rust-only gate while iterating, run:
+
+```sh
+scripts/ci.sh rust
+```
+
+CI runs the same script, so local verification and CI stay in parity. To opt in
+to the pre-push hook that runs the Rust gate before pushing, run:
+
+```sh
+git config core.hooksPath .githooks
+```
 
 ## Golden Vectors
 
