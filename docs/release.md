@@ -33,19 +33,15 @@ cargo publish -p metricchrono-core
 ```
 
 Wait for `metricchrono-core` to appear in the crates.io index, then publish the
-thin log and consensus crates, then the FFI crate:
+FFI crate:
 
 ```sh
-cargo publish --dry-run -p metricchrono-log
-cargo publish -p metricchrono-log
-cargo publish --dry-run -p metricchrono-consensus
-cargo publish -p metricchrono-consensus
 cargo publish --dry-run -p metricchrono-ffi
 cargo publish -p metricchrono-ffi
 ```
 
 The FFI dry-run is expected to fail before the core crate exists on crates.io,
-because `metricchrono-ffi` depends on `metricchrono-core = "0.1.0"`.
+because `metricchrono-ffi` depends on `metricchrono-core`.
 
 ## JavaScript
 
