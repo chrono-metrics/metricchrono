@@ -476,11 +476,6 @@ pub unsafe extern "C" fn mc_event_log_len(log: *const MCEventLog, out_len: *mut 
 }
 
 #[no_mangle]
-pub extern "C" fn mc_tick_distance_unchecked(distance: f64, tier: MCTier) -> f64 {
-    tick_distance(distance, Tier::from(tier))
-}
-
-#[no_mangle]
 pub extern "C" fn mc_tick_distance_raw(
     distance: f64,
     epsilon: f64,
