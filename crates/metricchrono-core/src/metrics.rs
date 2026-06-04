@@ -24,42 +24,51 @@ pub struct Absolute;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Euclidean;
 
+#[cfg(feature = "metrics-extra")]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SquaredEuclidean;
 
+#[cfg(feature = "metrics-extra")]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Manhattan;
 
+#[cfg(feature = "metrics-extra")]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Cosine;
 
+#[cfg(feature = "metrics-extra")]
 #[derive(Clone, Copy, Debug)]
 pub struct KullbackLeibler {
     pub epsilon: f64,
 }
 
+#[cfg(feature = "metrics-extra")]
 #[derive(Clone, Copy, Debug)]
 pub struct JensenShannon {
     pub epsilon: f64,
 }
 
+#[cfg(feature = "metrics-extra")]
 #[derive(Clone, Debug)]
 pub struct DiagonalMahalanobis {
     inverse_variance: Vec<f64>,
 }
 
+#[cfg(feature = "metrics-extra")]
 impl Default for KullbackLeibler {
     fn default() -> Self {
         Self { epsilon: 1e-12 }
     }
 }
 
+#[cfg(feature = "metrics-extra")]
 impl Default for JensenShannon {
     fn default() -> Self {
         Self { epsilon: 1e-12 }
     }
 }
 
+#[cfg(feature = "metrics-extra")]
 impl DiagonalMahalanobis {
     pub fn from_variance(variance: impl Into<Vec<f64>>) -> Self {
         let inverse_variance = variance
@@ -109,6 +118,7 @@ impl Metric<[f64]> for Euclidean {
     }
 }
 
+#[cfg(feature = "metrics-extra")]
 impl Metric<[f64]> for SquaredEuclidean {
     fn distance(&self, a: &[f64], b: &[f64]) -> f64 {
         if a.len() != b.len() {
@@ -124,6 +134,7 @@ impl Metric<[f64]> for SquaredEuclidean {
     }
 }
 
+#[cfg(feature = "metrics-extra")]
 impl Metric<[f64]> for Manhattan {
     fn distance(&self, a: &[f64], b: &[f64]) -> f64 {
         if a.len() != b.len() {
@@ -136,6 +147,7 @@ impl Metric<[f64]> for Manhattan {
     }
 }
 
+#[cfg(feature = "metrics-extra")]
 impl Metric<[f64]> for Cosine {
     fn distance(&self, a: &[f64], b: &[f64]) -> f64 {
         if a.len() != b.len() {
@@ -156,6 +168,7 @@ impl Metric<[f64]> for Cosine {
     }
 }
 
+#[cfg(feature = "metrics-extra")]
 impl Metric<[f64]> for KullbackLeibler {
     fn distance(&self, a: &[f64], b: &[f64]) -> f64 {
         divergence_inputs(a, b, self.epsilon)
@@ -169,6 +182,7 @@ impl Metric<[f64]> for KullbackLeibler {
     }
 }
 
+#[cfg(feature = "metrics-extra")]
 impl Metric<[f64]> for JensenShannon {
     fn distance(&self, a: &[f64], b: &[f64]) -> f64 {
         divergence_inputs(a, b, self.epsilon)
@@ -186,6 +200,7 @@ impl Metric<[f64]> for JensenShannon {
     }
 }
 
+#[cfg(feature = "metrics-extra")]
 impl Metric<[f64]> for DiagonalMahalanobis {
     fn distance(&self, a: &[f64], b: &[f64]) -> f64 {
         if a.len() != b.len() || a.len() != self.inverse_variance.len() {
@@ -220,6 +235,7 @@ pub fn ladder_pair<T: ?Sized, M: Metric<T>>(
     Ok(out)
 }
 
+#[cfg(feature = "metrics-extra")]
 fn divergence_inputs(a: &[f64], b: &[f64], epsilon: f64) -> Option<(Vec<f64>, Vec<f64>)> {
     if a.len() != b.len() || a.is_empty() || !epsilon.is_finite() || epsilon <= 0.0 {
         return None;
@@ -230,6 +246,7 @@ fn divergence_inputs(a: &[f64], b: &[f64], epsilon: f64) -> Option<(Vec<f64>, Ve
     ))
 }
 
+#[cfg(feature = "metrics-extra")]
 fn normalize_probabilities(values: &[f64], epsilon: f64) -> Vec<f64> {
     let mut out: Vec<f64> = values
         .iter()
