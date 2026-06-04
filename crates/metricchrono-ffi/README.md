@@ -25,6 +25,7 @@ Core functions return `MCStatus` and write results into caller-owned output
 buffers:
 
 - `mc_tick_distance`
+- `mc_tick_distance_raw`
 - `mc_tier_new`
 - `mc_ladder_new`, `mc_ladder_distance_owned`, `mc_ladder_len`, and
   `mc_ladder_free`
@@ -45,6 +46,6 @@ Use `mc_error_message` for a static human-readable status string.
 ## Publish Order
 
 Publish `metricchrono-core` first. This crate depends on
-`metricchrono-core = "0.1.0"`, so a standalone `cargo publish --dry-run -p
+`metricchrono-core = "0.2.0"`, so a standalone `cargo publish --dry-run -p
 metricchrono-ffi` cannot resolve until the core crate is already available in
 the crates.io index.

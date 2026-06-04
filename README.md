@@ -61,19 +61,12 @@ that is easy to store, compare, index, and feed into downstream models.
 
 ```rust
 use metricchrono_core::{
-    geometric_ladder, ladder_values, tick_distance, Euclidean, EventLog, Metric,
-    MetricChronoError,
+    geometric_ladder, ladder_pair, Euclidean, EventLog, MetricChronoError,
 };
 
 fn main() -> Result<(), MetricChronoError> {
     let ladder = geometric_ladder(0.5, 1.0, 2.0, 4, 0.5, 1.0)?;
-    let metric = Euclidean;
-    let distance = metric.distance(&[0.0, 0.0][..], &[3.0, 4.0][..]);
-
-    let tick = tick_distance(distance, ladder[0]);
-    println!("tier-0 tick: {tick}");
-
-    let ticks = ladder_values(distance, &ladder)?;
+    let ticks = ladder_pair(&[0.0, 0.0][..], &[3.0, 4.0][..], &Euclidean, &ladder)?;
     let mut log = EventLog::new(ladder.len())?;
     log.append(1_u64, ticks)?;
 
@@ -81,7 +74,7 @@ fn main() -> Result<(), MetricChronoError> {
 }
 ```
 
-Default Rust builds expose `Euclidean`, `Absolute`, `MetricFn`, the `Metric`
+Default Rust builds expose `Absolute`, `Euclidean`, `MetricFn`, the `Metric`
 trait, and `tick_pair`/`ladder_pair`. Use `features = ["metrics-extra"]` for
 `SquaredEuclidean`, `Manhattan`, `Cosine`, `KullbackLeibler`, `JensenShannon`,
 and `DiagonalMahalanobis`.

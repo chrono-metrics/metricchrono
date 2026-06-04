@@ -17,4 +17,4 @@ name = "metricchrono_ffi"
 crate-type = ["cdylib", "staticlib", "rlib"]
 
 [dependencies]
-metricchrono-core = { path = "../metricchrono-core", version = "0.1.0" }
+metricchrono-core = { path = "../metricchrono-core", version = "0.2.0" }

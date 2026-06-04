@@ -14,10 +14,13 @@ Versioned schema helpers are exported as `tierFromSchema`, `ladderFromSchema`,
 `tickVectorFromSchema`, and `consensusResultFromSchema`, with matching
 `*ToSchema` helpers for local values.
 
-Metric helpers include scalar `absoluteDistance` and vector Euclidean distance.
-Rust/WASM builds that need `SquaredEuclidean`, `Manhattan`, `Cosine`,
-`KullbackLeibler`, `JensenShannon`, or `DiagonalMahalanobis` use
-`features = ["metrics-extra"]`.
+Metric helpers include scalar `absoluteDistance`, vector `euclideanDistance`,
+and the full browser/JS metric set: `squaredEuclideanDistance`,
+`manhattanDistance`, `cosineDistance`, `kullbackLeiblerDistance`,
+`jensenShannonDistance`, and `diagonalMahalanobisDistance`. The
+`metrics-extra` flag is only a Rust `metricchrono-core` Cargo feature; the
+browser/JS-WASM wrapper exposes its metric helpers directly without requiring a
+Cargo feature.
 
 `loadWasmMetricChrono` can wrap a compatible WASM module that exports
 `mc_tick_distance_raw`. The repository does not claim a separate optimized WASM

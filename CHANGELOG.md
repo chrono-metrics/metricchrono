@@ -7,10 +7,12 @@
   APIs directly.
 - BREAKING: Moved `SquaredEuclidean`, `Manhattan`, `Cosine`,
   `KullbackLeibler`, `JensenShannon`, and `DiagonalMahalanobis` behind the
-  default-off `metrics-extra` Cargo feature. Migration: enable
-  `features = ["metrics-extra"]`.
+  default-off `metrics-extra` Cargo feature. These names do not resolve in a
+  default build. Migration: use
+  `metricchrono-core = { version = "0.2", features = ["metrics-extra"] }`.
 - BREAKING: Removed the C ABI export `mc_tick_distance_unchecked`; the safe
-  `mc_tick_distance` and WASM hot-path `mc_tick_distance_raw` remain exported.
+  `mc_tick_distance` and the primitive, allocation-free
+  `mc_tick_distance_raw` used by the WASM binding remain exported.
   Migration: call `mc_tick_distance` for safe use or `mc_tick_distance_raw` for
   the WASM hot path.
 

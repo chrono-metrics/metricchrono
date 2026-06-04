@@ -15,3 +15,4 @@ bindings/python/rust/
 dist/
 build/
 *.egg-info/
+.DS_Store

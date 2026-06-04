@@ -63,8 +63,8 @@ python3 -m pip install pytest
 PYTHONPATH=bindings/python METRICCHRONO_FFI_LIB=target/release/libmetricchrono_ffi.dylib \
   python3 -m pytest bindings/python/tests
 python3 -m build bindings/python --sdist --outdir /tmp/metricchrono-sdist
-python3 -m pip wheel /tmp/metricchrono-sdist/metricchrono-0.1.0.tar.gz --no-deps -w /tmp/metricchrono-wheel
-python3 -m pip install --force-reinstall /tmp/metricchrono-wheel/metricchrono-0.1.0-*.whl
+python3 -m pip wheel /tmp/metricchrono-sdist/metricchrono-0.2.0.tar.gz --no-deps -w /tmp/metricchrono-wheel
+python3 -m pip install --force-reinstall /tmp/metricchrono-wheel/metricchrono-0.2.0-*.whl
 python3 -c "import metricchrono as mc; print(mc.tick_distance(1.2, mc.Tier(0.5, 1.0, 0.5, 1.0)))"
 ```
 

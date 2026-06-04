@@ -8,7 +8,7 @@ bundles the platform native library into the wheel:
 
 ```sh
 python3 -m pip wheel bindings/python --no-deps -w /tmp/metricchrono-wheel
-python3 -m pip install /tmp/metricchrono-wheel/metricchrono-0.1.0-*.whl
+python3 -m pip install /tmp/metricchrono-wheel/metricchrono-0.2.0-*.whl
 ```
 
 Cargo must be available for source builds. To use the wrapper directly from the
@@ -62,5 +62,5 @@ PYTHONPATH=bindings/python METRICCHRONO_FFI_LIB=target/release/libmetricchrono_f
   python3 bindings/python/tests/golden.py
 python3 -m pip install build
 python3 -m build bindings/python --sdist --outdir /tmp/metricchrono-sdist
-python3 -m pip wheel /tmp/metricchrono-sdist/metricchrono-0.1.0.tar.gz --no-deps -w /tmp/metricchrono-wheel
+python3 -m pip wheel /tmp/metricchrono-sdist/metricchrono-0.2.0.tar.gz --no-deps -w /tmp/metricchrono-wheel
 ```
