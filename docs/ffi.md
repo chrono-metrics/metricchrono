@@ -18,6 +18,7 @@ Core symbols:
 - `mc_ladder_len`
 - `mc_ladder_distance_owned`
 - `mc_tick_distance`
+- `mc_tick_distance_raw`
 - `mc_ladder_distance`
 - `mc_smooth_tick_distance`
 - `mc_geometric_ladder`

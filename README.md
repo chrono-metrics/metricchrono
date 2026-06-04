@@ -27,9 +27,6 @@ This repository contains:
 - `metricchrono-core`: the canonical Rust kernel, ladder utilities, metric
   traits, smooth surrogate, basic in-memory event log, adaptive zoom helpers,
   and minimal consensus tick field.
-- `metricchrono-log`: a thin crate exposing the open in-memory event log.
-- `metricchrono-consensus`: a thin crate exposing the minimal consensus tick
-  field.
 - `metricchrono-ffi`: a C ABI over the allocation-free hot paths and the basic
   event log.
 - `bindings/python`: production Python bindings over the bundled C ABI shared
@@ -39,6 +36,10 @@ This repository contains:
 
 Product-specific deployment tooling, hosted services, and organization-specific
 integrations are out of scope for this repository.
+
+The former `metricchrono-log` and `metricchrono-consensus` re-export crates were
+removed in v0.2. Depend on `metricchrono-core` directly for event-log and
+consensus APIs.
 
 ## Why MetricChrono
 
@@ -60,25 +61,30 @@ that is easy to store, compare, index, and feed into downstream models.
 
 ```rust
 use metricchrono_core::{
-    geometric_ladder, ladder_pair, ladder_values, tick_distance, Euclidean, MetricChronoError,
-    Tier,
+    geometric_ladder, ladder_values, tick_distance, Euclidean, EventLog, Metric,
+    MetricChronoError,
 };
 
 fn main() -> Result<(), MetricChronoError> {
-    let tier = Tier::new(0.5, 1.0, 0.5, 1.0)?;
-    assert_eq!(tick_distance(0.25, tier), 0.0);
-
     let ladder = geometric_ladder(0.5, 1.0, 2.0, 4, 0.5, 1.0)?;
-    let ticks = ladder_values(3.0, &ladder)?;
-    println!("{ticks:?}");
-
     let metric = Euclidean;
-    let paired = ladder_pair(&[0.0, 0.0][..], &[3.0, 4.0][..], &metric, &ladder)?;
-    println!("{paired:?}");
+    let distance = metric.distance(&[0.0, 0.0][..], &[3.0, 4.0][..]);
+
+    let tick = tick_distance(distance, ladder[0]);
+    println!("tier-0 tick: {tick}");
+
+    let ticks = ladder_values(distance, &ladder)?;
+    let mut log = EventLog::new(ladder.len())?;
+    log.append(1_u64, ticks)?;
 
     Ok(())
 }
 ```
+
+Default Rust builds expose `Euclidean`, `Absolute`, `MetricFn`, the `Metric`
+trait, and `tick_pair`/`ladder_pair`. Use `features = ["metrics-extra"]` for
+`SquaredEuclidean`, `Manhattan`, `Cosine`, `KullbackLeibler`, `JensenShannon`,
+and `DiagonalMahalanobis`.
 
 ## Build And Test
 
@@ -134,9 +140,8 @@ The public core is deliberately small:
 
 - `tick_distance(d, tier)` computes a single epsilon-delta-p tick.
 - `ladder_distance(d, ladder, out)` computes a deterministic multiscale vector.
-- `Metric<T>` lets callers plug in scalar absolute, Euclidean, squared
-  Euclidean, Manhattan, cosine, KL-like, Jensen-Shannon, diagonal Mahalanobis,
-  or custom distances. Pair APIs return errors for invalid measured distances,
+- `Metric<T>` and `MetricFn` let callers plug in default, feature-gated, or
+  custom distances. Pair APIs return errors for invalid measured distances,
   including dimension mismatches surfaced as `NaN` by metric implementations.
 - `smooth_tick_distance` and `smooth_ladder_distance` provide differentiable
   surrogates for ML and RL experiments.
