@@ -98,7 +98,6 @@ MCStatus mc_event_log_next_event(const MCEventLog *log,
                                  bool *has_event);
 MCStatus mc_event_log_len(const MCEventLog *log, size_t *out_len);
 
-double mc_tick_distance_unchecked(double distance, MCTier tier);
 double mc_tick_distance_raw(double distance,
                             double epsilon,
                             double delta,
