@@ -103,8 +103,6 @@ run_package() {
   header "package"
 
   cargo package -p metricchrono-core
-  cargo package -p metricchrono-log --allow-dirty --no-verify --list
-  cargo package -p metricchrono-consensus --allow-dirty --no-verify --list
   cargo package -p metricchrono-ffi --allow-dirty --no-verify --list
 
   if has_js_tools "package js"; then

@@ -4,10 +4,12 @@ use metricchrono_core::{
     ladder_values, normalize_ticks, simple_weight_update, smooth_ladder_values,
     smooth_tick_distance, tick_distance, tick_pair, tier_residuals, try_tick_distance,
     validate_ladder, weighted_consensus, weighted_consensus_tierwise, zoom_ladder_distance,
-    Absolute, ConsensusInput, DiagonalMahalanobis, Euclidean, EventId, EventLog, JensenShannon,
-    KullbackLeibler, Ladder, Metric, MetricChronoError, Normalization, PromotionCounter,
-    SmoothParams, Tier, ZoomPolicy,
+    Absolute, ConsensusInput, Euclidean, EventId, EventLog, Ladder, Metric, MetricChronoError,
+    Normalization, PromotionCounter, SmoothParams, Tier, ZoomPolicy,
 };
+
+#[cfg(feature = "metrics-extra")]
+use metricchrono_core::{DiagonalMahalanobis, JensenShannon, KullbackLeibler};
 
 #[test]
 fn kernel_and_ladder_match_epsilon_delta_p_contract() {
@@ -57,9 +59,23 @@ fn kernel_and_ladder_match_epsilon_delta_p_contract() {
 }
 
 #[test]
-fn public_metric_examples_include_divergence_and_mahalanobis() {
+fn public_metric_examples_include_default_metrics() {
     assert_eq!(Absolute.distance(&2.0, &5.5), 3.5);
 
+    let tier = Tier::new(0.5, 1.0, 0.0, 1.0).unwrap();
+    assert_eq!(tick_pair(&2.0, &3.5, &Absolute, tier).unwrap(), 2.0);
+    assert!(ladder_pair(
+        &[0.0, 0.0][..],
+        &[1.0][..],
+        &Euclidean,
+        &[Tier::new(0.5, 1.0, 0.0, 1.0).unwrap()]
+    )
+    .is_err());
+}
+
+#[cfg(feature = "metrics-extra")]
+#[test]
+fn public_metric_examples_include_divergence_and_mahalanobis() {
     let p = [0.2, 0.8];
     let q = [0.5, 0.5];
 
@@ -71,16 +87,6 @@ fn public_metric_examples_include_divergence_and_mahalanobis() {
     let metric = DiagonalMahalanobis::from_variance([4.0, 1.0]);
     let distance = metric.distance(&[0.0, 0.0], &[4.0, 3.0]);
     assert!((distance - (13.0_f64).sqrt()).abs() < 1e-12);
-
-    let tier = Tier::new(0.5, 1.0, 0.0, 1.0).unwrap();
-    assert_eq!(tick_pair(&2.0, &3.5, &Absolute, tier).unwrap(), 2.0);
-    assert!(ladder_pair(
-        &[0.0, 0.0][..],
-        &[1.0][..],
-        &Euclidean,
-        &[Tier::new(0.5, 1.0, 0.0, 1.0).unwrap()]
-    )
-    .is_err());
 }
 
 #[test]
