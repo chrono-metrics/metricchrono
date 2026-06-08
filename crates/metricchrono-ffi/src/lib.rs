@@ -162,13 +162,14 @@ fn normalization_from_id(id: c_int) -> Result<Normalization, MetricChronoError> 
 }
 
 #[no_mangle]
-pub extern "C" fn mc_error_message(status: MCStatus) -> *const c_char {
+pub extern "C" fn mc_error_message(status: c_int) -> *const c_char {
     match status {
-        MCStatus::Ok => b"ok\0".as_ptr().cast(),
-        MCStatus::Null => b"null pointer\0".as_ptr().cast(),
-        MCStatus::InvalidArgument => b"invalid argument\0".as_ptr().cast(),
-        MCStatus::BufferTooSmall => b"buffer too small\0".as_ptr().cast(),
-        MCStatus::Panic => b"panic\0".as_ptr().cast(),
+        0 => b"ok\0".as_ptr().cast(),
+        1 => b"null pointer\0".as_ptr().cast(),
+        2 => b"invalid argument\0".as_ptr().cast(),
+        3 => b"buffer too small\0".as_ptr().cast(),
+        255 => b"panic\0".as_ptr().cast(),
+        _ => b"unknown status\0".as_ptr().cast(),
     }
 }
 
@@ -699,7 +700,14 @@ pub unsafe extern "C" fn mc_weighted_consensus(
         if rows == 0 || cols == 0 {
             return invalid_argument("rows and cols must be > 0");
         }
-        let Some(vectors) = (unsafe { slice_from_ptr(vectors, rows.saturating_mul(cols)) }) else {
+        let Some(vector_len) = rows.checked_mul(cols) else {
+            return invalid_argument("rows * cols overflow");
+        };
+        const MAX_F64_SLICE_LEN: usize = isize::MAX as usize / std::mem::size_of::<f64>();
+        if vector_len > MAX_F64_SLICE_LEN || out_len > MAX_F64_SLICE_LEN {
+            return invalid_argument("slice byte length exceeds isize::MAX");
+        }
+        let Some(vectors) = (unsafe { slice_from_ptr(vectors, vector_len) }) else {
             return MCStatus::Null;
         };
         let Some(weights) = (unsafe { slice_from_ptr(weights, rows) }) else {

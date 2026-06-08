@@ -48,7 +48,10 @@ typedef struct MCLadder MCLadder;
 typedef struct MCEventLog MCEventLog;
 typedef struct MCPromotionCounter MCPromotionCounter;
 
-const char *mc_error_message(MCStatus status);
+/* Caller-buffer/sizing APIs support a two-call protocol: out_len and other
+ * sizing-out parameters are written even when MC_STATUS_BUFFER_TOO_SMALL is
+ * returned, so callers can size a buffer and call again. */
+const char *mc_error_message(int status);
 MCStatus mc_last_error_message(char *buf, size_t cap, size_t *out_len);
 MCStatus mc_tier_new(double epsilon,
                      double delta,
