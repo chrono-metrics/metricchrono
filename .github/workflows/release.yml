@@ -186,11 +186,17 @@ jobs:
           else
             ok=0
             for attempt in 1 2 3 4 5; do
-              if cargo publish -p metricchrono-ffi; then ok=1; break; fi
-              echo "ffi publish attempt $attempt failed; waiting 30s for core to reach the crates.io index"
+              if cargo publish -p metricchrono-ffi 2>&1 | tee "$RUNNER_TEMP/ffi-publish.log"; then ok=1; break; fi
+              # Only the crates.io index-propagation delay (core not yet queryable)
+              # is transient; anything else (e.g. a 403 auth error) fails fast.
+              if ! grep -qiE "no matching package|failed to select a version|could not find" "$RUNNER_TEMP/ffi-publish.log"; then
+                echo "::error::metricchrono-ffi publish failed with a non-transient error (see log above)"
+                exit 1
+              fi
+              echo "ffi attempt $attempt: metricchrono-core $VERSION not yet in the crates.io index; retrying in 30s"
               sleep 30
             done
-            [ "$ok" = 1 ] || { echo "::error::metricchrono-ffi publish failed after 5 attempts"; exit 1; }
+            [ "$ok" = 1 ] || { echo "::error::metricchrono-ffi publish failed after 5 attempts (index propagation)"; exit 1; }
           fi
 
   publish-npm:

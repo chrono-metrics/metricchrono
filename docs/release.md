@@ -45,8 +45,10 @@ stored as repo secrets.** Configure one trusted publisher per registry, each
 pointing at owner `chrono-metrics`, repository `metricchrono`, workflow
 `release.yml`:
 
-- **crates.io** → the crate → Settings → Trusted Publishing → add a GitHub
-  Actions publisher. The `publish-crates` job mints a short-lived token via
+- **crates.io** → for **both** crates (`metricchrono-core` *and*
+  `metricchrono-ffi`) → the crate → Settings → Trusted Publishing → add a GitHub
+  Actions publisher. Trusted publishing is **per-crate**, so each crate needs its
+  own. The `publish-crates` job mints a short-lived token via
   `rust-lang/crates-io-auth-action` (`id-token: write`).
 - **npm** → `@metricchrono/core` → Settings → Trusted Publisher → GitHub
   Actions. The `publish-npm` job carries `id-token: write` and upgrades npm to a
