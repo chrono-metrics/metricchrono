@@ -135,25 +135,7 @@ export function simpleWeightUpdate(
 ): number[];
 
 export function euclideanDistance(a: readonly number[], b: readonly number[]): number;
-export function squaredEuclideanDistance(a: readonly number[], b: readonly number[]): number;
 export function absoluteDistance(a: number, b: number): number;
-export function manhattanDistance(a: readonly number[], b: readonly number[]): number;
-export function cosineDistance(a: readonly number[], b: readonly number[]): number;
-export function kullbackLeiblerDistance(
-  a: readonly number[],
-  b: readonly number[],
-  epsilon?: number,
-): number;
-export function jensenShannonDistance(
-  a: readonly number[],
-  b: readonly number[],
-  epsilon?: number,
-): number;
-export function diagonalMahalanobisDistance(
-  a: readonly number[],
-  b: readonly number[],
-  inverseVariance: readonly number[],
-): number;
 export function tickPair<T>(
   a: T,
   b: T,

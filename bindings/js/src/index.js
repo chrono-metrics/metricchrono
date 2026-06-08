@@ -95,7 +95,7 @@ export function geometricLadder(epsilon0, delta0, ratio, tiers, p = 0.5, epsilon
 }
 
 export function tierFromSchema(document) {
-  ensureSchema(document, "tier.v1");
+  ensureSchema(document, "tier.v1", ["metricchrono_schema", "epsilon", "delta", "p", "epsilon_ref"]);
   return tier(document.epsilon, document.delta, document.p, document.epsilon_ref);
 }
 
@@ -111,14 +111,17 @@ export function tierToSchema(tierSpec) {
 }
 
 export function ladderFromSchema(document) {
-  ensureSchema(document, "ladder.v1");
+  ensureSchema(document, "ladder.v1", ["metricchrono_schema", "tiers"]);
   return customLadder(
-    document.tiers.map((item) => ({
-      epsilon: item.epsilon,
-      delta: item.delta,
-      p: item.p,
-      epsilonRef: item.epsilon_ref,
-    })),
+    document.tiers.map((item, index) => {
+      ensureExactFields(item, ["epsilon", "delta", "p", "epsilon_ref"], `tier at index ${index}`);
+      return {
+        epsilon: item.epsilon,
+        delta: item.delta,
+        p: item.p,
+        epsilonRef: item.epsilon_ref,
+      };
+    }),
   );
 }
 
@@ -136,7 +139,7 @@ export function ladderToSchema(ladder) {
 }
 
 export function tickVectorFromSchema(document) {
-  ensureSchema(document, "tick_vector.v1");
+  ensureSchema(document, "tick_vector.v1", ["metricchrono_schema", "ticks"]);
   return document.ticks.slice();
 }
 
@@ -148,7 +151,12 @@ export function tickVectorToSchema(ticks) {
 }
 
 export function consensusResultFromSchema(document) {
-  ensureSchema(document, "consensus_result.v1");
+  ensureSchema(document, "consensus_result.v1", [
+    "metricchrono_schema",
+    "consensus",
+    "residuals",
+    "weights",
+  ]);
   return {
     metricchrono_schema: "consensus_result.v1",
     consensus: document.consensus.slice(),
@@ -354,10 +362,19 @@ export class EventLog {
   }
 
   nextEvent(index, tierIndex) {
-    return this.records[index]?.nextEvent[tierIndex] ?? null;
+    if (!Number.isInteger(index) || index < 0 || index >= this.records.length) {
+      throw new MetricChronoError(`event index ${index} out of range`);
+    }
+    if (!Number.isInteger(tierIndex) || tierIndex < 0 || tierIndex >= this.tierCount) {
+      throw new MetricChronoError(`tier ${tierIndex} out of range`);
+    }
+    return this.records[index].nextEvent[tierIndex] ?? null;
   }
 
   firstEvent(tierIndex) {
+    if (!Number.isInteger(tierIndex) || tierIndex < 0 || tierIndex >= this.tierCount) {
+      throw new MetricChronoError(`tier ${tierIndex} out of range`);
+    }
     return this.firstByTier[tierIndex] ?? null;
   }
 
@@ -465,61 +482,8 @@ export function euclideanDistance(a, b) {
   return Math.sqrt(a.map((value, index) => (value - b[index]) ** 2).reduce(sum, 0));
 }
 
-export function squaredEuclideanDistance(a, b) {
-  ensureSameLength(a, b);
-  return a.map((value, index) => (value - b[index]) ** 2).reduce(sum, 0);
-}
-
 export function absoluteDistance(a, b) {
   return Math.abs(a - b);
-}
-
-export function manhattanDistance(a, b) {
-  ensureSameLength(a, b);
-  return a.map((value, index) => Math.abs(value - b[index])).reduce(sum, 0);
-}
-
-export function cosineDistance(a, b) {
-  ensureSameLength(a, b);
-  const dot = a.map((value, index) => value * b[index]).reduce(sum, 0);
-  const normA = Math.sqrt(a.map((value) => value * value).reduce(sum, 0));
-  const normB = Math.sqrt(b.map((value) => value * value).reduce(sum, 0));
-  if (normA <= 0 || normB <= 0) {
-    return 1;
-  }
-  return Math.min(2, Math.max(0, 1 - dot / (normA * normB)));
-}
-
-export function kullbackLeiblerDistance(a, b, epsilon = 1e-12) {
-  const [p, q] = divergenceInputs(a, b, epsilon);
-  return p.map((value, index) => value * (Math.log(value) - Math.log(q[index]))).reduce(sum, 0);
-}
-
-export function jensenShannonDistance(a, b, epsilon = 1e-12) {
-  const [p, q] = divergenceInputs(a, b, epsilon);
-  return p
-    .map((value, index) => {
-      const right = q[index];
-      const midpoint = 0.5 * (value + right);
-      return (
-        0.5 * value * (Math.log(value) - Math.log(midpoint)) +
-        0.5 * right * (Math.log(right) - Math.log(midpoint))
-      );
-    })
-    .reduce(sum, 0);
-}
-
-export function diagonalMahalanobisDistance(a, b, inverseVariance) {
-  ensureSameLength(a, b);
-  ensureSameLength(a, inverseVariance);
-  return Math.sqrt(
-    a
-      .map((value, index) => {
-        const diff = value - b[index];
-        return diff * diff * Math.max(0, inverseVariance[index]);
-      })
-      .reduce(sum, 0),
-  );
 }
 
 export function tickPair(a, b, metric, tierSpec) {
@@ -608,24 +572,28 @@ function ensureSameLength(a, b) {
   }
 }
 
-function divergenceInputs(a, b, epsilon) {
-  ensureSameLength(a, b);
-  if (a.length === 0 || !Number.isFinite(epsilon) || epsilon <= 0) {
-    throw new MetricChronoError("divergence inputs must be non-empty and epsilon must be > 0");
-  }
-  return [normalizeProbabilities(a, epsilon), normalizeProbabilities(b, epsilon)];
-}
-
-function ensureSchema(document, expected) {
+function ensureSchema(document, expected, fields) {
+  ensureExactFields(document, fields, expected);
   if (document.metricchrono_schema !== expected) {
     throw new MetricChronoError(`expected schema ${expected}`);
   }
 }
 
-function normalizeProbabilities(values, epsilon) {
-  const out = values.map((value) => (Number.isFinite(value) ? Math.max(0, value) + epsilon : epsilon));
-  const total = Math.max(epsilon, out.reduce(sum, 0));
-  return out.map((value) => value / total);
+function ensureExactFields(document, fields, context) {
+  if (document === null || typeof document !== "object" || Array.isArray(document)) {
+    throw new MetricChronoError(`${context} schema must be an object`);
+  }
+  const allowed = new Set(fields);
+  for (const field of Object.keys(document)) {
+    if (!allowed.has(field)) {
+      throw new MetricChronoError(`unknown field ${field} in ${context} schema`);
+    }
+  }
+  for (const field of fields) {
+    if (!Object.hasOwn(document, field)) {
+      throw new MetricChronoError(`missing field ${field} in ${context} schema`);
+    }
+  }
 }
 
 function sum(left, right) {
