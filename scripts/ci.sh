@@ -119,8 +119,8 @@ run_package() {
     tmp_dirs+=("$sdist_dir" "$wheel_dir")
 
     python -m build bindings/python --sdist --outdir "$sdist_dir"
-    python -m pip wheel "$sdist_dir/metricchrono-0.2.0.tar.gz" --no-deps -w "$wheel_dir"
-    python -m pip install --force-reinstall "$wheel_dir"/metricchrono-0.2.0-*.whl
+    python -m pip wheel "$sdist_dir"/metricchrono-*.tar.gz --no-deps -w "$wheel_dir"
+    python -m pip install --force-reinstall "$wheel_dir"/metricchrono-*.whl
     python -c "import metricchrono as mc; print(mc.tick_distance(1.2, mc.Tier(0.5, 1.0, 0.5, 1.0)))"
   fi
 }
