@@ -189,21 +189,25 @@ jobs:
   publish-npm:
     needs: [guard, gate, publish-crates]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC for npm trusted publishing (no token stored)
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
           registry-url: "https://registry.npmjs.org"
+      - name: Ensure npm supports trusted publishing (OIDC needs npm >= 11.5.1)
+        run: npm install -g npm@latest
       - name: npm publish --dry-run
         if: needs.guard.outputs.dry_run == 'true'
         working-directory: bindings/js
         run: npm publish --dry-run --access public
-      - name: npm publish
+      - name: npm publish (OIDC trusted publishing)
         if: needs.guard.outputs.dry_run != 'true'
         working-directory: bindings/js
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           VERSION: ${{ needs.guard.outputs.version }}
         run: |
           set -euo pipefail
