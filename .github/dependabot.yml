@@ -1,0 +1,7 @@
+version: 2
+updates:
+  # Keep the SHA-pinned actions in the workflows current (security + maintenance).
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

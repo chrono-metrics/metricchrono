@@ -1,0 +1,285 @@
+name: release
+
+# Tag-driven release. Push a `vX.Y.Z` tag and this gates the exact tagged commit
+# through scripts/ci.sh, then publishes all three distributions (crates.io
+# core+ffi, PyPI, npm) so a release can't be half-shipped or forgotten.
+#
+# Security model:
+#   - REAL publishes happen ONLY on a `v*` tag push whose commit is on origin/main.
+#   - `workflow_dispatch` is DRY-RUN ONLY (validates the pipeline, publishes nothing).
+#   - Publish tokens are present only on the real-publish steps, never on dry-run.
+#   - PyPI uses OIDC trusted publishing from a minimal job that runs no build code.
+#   - Actions are SHA-pinned (Dependabot bumps them via .github/dependabot.yml).
+#
+# One-time setup before the first real release (see docs/release.md):
+#   - repo secret CARGO_REGISTRY_TOKEN  (crates.io API token)
+#   - repo secret NPM_TOKEN             (npm *automation* token — bypasses 2FA)
+#   - PyPI trusted publisher for project `metricchrono` -> this repo + release.yml
+#
+# Validate end-to-end without publishing:  gh workflow run release.yml
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {} # dry-run only; real publishes come from tags
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Resolve the release version and refuse to proceed unless: the tag matches all
+  # three manifests; the tagged commit is on origin/main; and the version is not
+  # already published on any registry. workflow_dispatch is forced to dry-run.
+  guard:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      dry_run: ${{ steps.v.outputs.dry_run }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0 # full history for the origin/main ancestry check
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.12"
+      - id: v
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          TAG_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          read_toml() { python3 -c "import tomllib,sys,functools; d=tomllib.load(open(sys.argv[1],'rb')); print(functools.reduce(lambda o,k:o[k], sys.argv[2].split('.'), d))" "$1" "$2"; }
+
+          if [ "$EVENT_NAME" = "push" ]; then
+            dry="false"
+            version="${REF_NAME#v}"
+            src="git tag $REF_NAME"
+          else
+            dry="true" # manual dispatch is ALWAYS dry-run; real publishes come from tags
+            version="$(read_toml Cargo.toml workspace.package.version)"
+            src="workspace Cargo.toml (dispatch dry-run)"
+          fi
+
+          cargo_v="$(read_toml Cargo.toml workspace.package.version)"
+          py_v="$(read_toml bindings/python/pyproject.toml project.version)"
+          js_v="$(node -p "require('./bindings/js/package.json').version")"
+          echo "release version: $version (from $src); dry_run=$dry"
+          echo "manifests -> cargo=$cargo_v js=$js_v python=$py_v"
+
+          fail=0
+          for pair in "cargo:$cargo_v" "js:$js_v" "python:$py_v"; do
+            if [ "${pair#*:}" != "$version" ]; then
+              echo "::error::${pair%%:*} version (${pair#*:}) != release version ($version)"
+              fail=1
+            fi
+          done
+          if [ "$fail" != 0 ]; then
+            echo "::error::version/tag mismatch — refusing to release"
+            exit 1
+          fi
+
+          if [ "$dry" = "false" ]; then
+            # The tag commit must sit on origin/main — no releases from off-main commits.
+            git fetch --no-tags origin main
+            if ! git merge-base --is-ancestor "$TAG_SHA" FETCH_HEAD; then
+              echo "::error::tag commit $TAG_SHA is not on origin/main — refusing to release from an off-main commit"
+              exit 1
+            fi
+            # The CHANGELOG must have a non-empty section for this version — fail here,
+            # before anything publishes, not after.
+            if ! awk -v ver="$version" '
+              $0 == "## " ver || index($0, "## " ver " ") == 1 { grab = 1; next }
+              grab && /^## / { exit }
+              grab { print }
+            ' CHANGELOG.md | grep -q '[^[:space:]]'; then
+              echo "::error::no non-empty CHANGELOG.md section for $version"
+              exit 1
+            fi
+            # Block a re-release of a version that is already live on ALL registries (a
+            # forgotten version bump). A partial release is allowed through so a re-run
+            # can complete it — the publish steps skip artifacts that already exist.
+            # The crates.io User-Agent header is MANDATORY (crates.io returns 403 without
+            # one), so do not drop it.
+            code() { curl -s -o /dev/null -w '%{http_code}' -m 15 -A "metricchrono-release (github actions)" "$1"; }
+            live=0
+            for url in \
+              "https://crates.io/api/v1/crates/metricchrono-core/$version" \
+              "https://crates.io/api/v1/crates/metricchrono-ffi/$version" \
+              "https://registry.npmjs.org/@metricchrono%2Fcore/$version" \
+              "https://pypi.org/pypi/metricchrono/$version/json"; do
+              [ "$(code "$url")" = "200" ] && live=$((live + 1))
+            done
+            if [ "$live" = 4 ]; then
+              echo "::error::version $version is already published on every registry — bump the version"
+              exit 1
+            fi
+            if [ "$live" != 0 ]; then
+              echo "::warning::version $version is partially published ($live/4) — re-running will complete it (already-published artifacts are skipped)"
+            fi
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "dry_run=$dry" >> "$GITHUB_OUTPUT"
+
+  # Re-run the full single-source-of-truth gate on the tagged commit. Publishes
+  # run only if this passes, so a release can never ship a red build.
+  gate:
+    needs: guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.12"
+      - run: scripts/ci.sh rust
+      - run: scripts/ci.sh js
+      - run: scripts/ci.sh python
+      - run: scripts/ci.sh package
+
+  publish-crates:
+    needs: [guard, gate]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - name: cargo publish --dry-run (core)
+        if: needs.guard.outputs.dry_run == 'true'
+        run: cargo publish --dry-run -p metricchrono-core
+      - name: cargo publish (core, then ffi)
+        if: needs.guard.outputs.dry_run != 'true'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          VERSION: ${{ needs.guard.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Idempotent + resilient: skip a crate already on crates.io (so a re-run can
+          # complete a partial release), and retry ffi to absorb crates.io index
+          # propagation after core is published. The UA header is mandatory (else 403).
+          published() { [ "$(curl -s -o /dev/null -w '%{http_code}' -m 15 -A 'metricchrono-release (github actions)' "https://crates.io/api/v1/crates/$1/$VERSION")" = "200" ]; }
+          if published metricchrono-core; then
+            echo "metricchrono-core $VERSION already on crates.io; skipping"
+          else
+            cargo publish -p metricchrono-core
+          fi
+          if published metricchrono-ffi; then
+            echo "metricchrono-ffi $VERSION already on crates.io; skipping"
+          else
+            ok=0
+            for attempt in 1 2 3 4 5; do
+              if cargo publish -p metricchrono-ffi; then ok=1; break; fi
+              echo "ffi publish attempt $attempt failed; waiting 30s for core to reach the crates.io index"
+              sleep 30
+            done
+            [ "$ok" = 1 ] || { echo "::error::metricchrono-ffi publish failed after 5 attempts"; exit 1; }
+          fi
+
+  publish-npm:
+    needs: [guard, gate, publish-crates]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+          registry-url: "https://registry.npmjs.org"
+      - name: npm publish --dry-run
+        if: needs.guard.outputs.dry_run == 'true'
+        working-directory: bindings/js
+        run: npm publish --dry-run --access public
+      - name: npm publish
+        if: needs.guard.outputs.dry_run != 'true'
+        working-directory: bindings/js
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ needs.guard.outputs.version }}
+        run: |
+          set -euo pipefail
+          if npm view "@metricchrono/core@$VERSION" version >/dev/null 2>&1; then
+            echo "@metricchrono/core@$VERSION already on npm; skipping"
+          else
+            npm publish --access public
+          fi
+
+  # Build the PyPI sdist with NO OIDC token in scope (this runs setup.py / build
+  # code), then hand the artifact to a separate minimal publish job.
+  build-dist:
+    needs: [guard, gate]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.12"
+      - name: Build and check sdist
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade build twine
+          python -m build bindings/python --sdist --outdir dist
+          twine check dist/*
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: pypi-dist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  # Minimal OIDC publish job: downloads the prebuilt sdist and publishes. Runs no
+  # repo/build code, so the trusted-publishing token is only reachable by the
+  # publish action itself.
+  publish-pypi:
+    needs: [guard, gate, publish-crates, publish-npm, build-dist]
+    if: needs.guard.outputs.dry_run != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: pypi-dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
+        with:
+          packages-dir: dist
+          skip-existing: true
+
+  github-release:
+    needs: [guard, publish-crates, publish-npm, publish-pypi]
+    if: needs.guard.outputs.dry_run != 'true' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - name: Extract changelog section
+        env:
+          VERSION: ${{ needs.guard.outputs.version }}
+        run: |
+          set -euo pipefail
+          awk -v ver="$VERSION" '
+            $0 == "## " ver || index($0, "## " ver " ") == 1 { grab = 1; next }
+            grab && /^## / { exit }
+            grab { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "::error::no CHANGELOG.md section found for $VERSION"
+            exit 1
+          fi
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.guard.outputs.version }}
+        run: gh release create "$TAG" --title "v$VERSION" --notes-file notes.md --verify-tag

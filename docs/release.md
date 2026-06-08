@@ -3,6 +3,65 @@
 This checklist keeps publication mechanical and ordered. It is intentionally
 separate from the implementation scope in `docs/scope.md`.
 
+## Automated release (recommended)
+
+`.github/workflows/release.yml` runs the whole release from a version tag. Bump
+the version in all three manifests so they agree, update the changelog, then tag
+and push:
+
+```sh
+# 1. bump the version in ALL of:
+#      Cargo.toml ([workspace.package] version)
+#      bindings/js/package.json
+#      bindings/python/pyproject.toml
+# 2. add the new dated section to CHANGELOG.md
+git commit -am "Release X.Y.Z"
+git tag -a vX.Y.Z -m "metricchrono X.Y.Z"
+git push origin main vX.Y.Z
+```
+
+The workflow refuses to publish unless the tag matches all three manifests, the
+tagged commit is an ancestor of `origin/main`, and the version is not already
+published on any registry. It then re-runs `scripts/ci.sh` on the tagged commit,
+publishes crates.io (`metricchrono-core` then `metricchrono-ffi`), PyPI
+(`metricchrono`), and npm (`@metricchrono/core`), and cuts a GitHub release from
+the matching changelog section. `workflow_dispatch` is **dry-run only** — it
+validates the whole pipeline and publishes nothing (real publishes come from
+tags):
+
+```sh
+gh workflow run release.yml
+```
+
+If a publish job fails partway (a registry hiccup, an index-propagation
+timeout), fix the cause and **re-run the failed jobs** from the Actions run: the
+publish steps are idempotent — already-published crates and versions are skipped
+— so a re-run completes the partial release instead of erroring.
+
+### One-time setup
+
+- Repo secret `CARGO_REGISTRY_TOKEN` — a crates.io API token.
+- Repo secret `NPM_TOKEN` — an npm **automation** token (`npm token create
+  --type=automation`); automation tokens bypass the publish 2FA prompt that
+  otherwise blocks an unattended `npm publish`.
+- A PyPI **trusted publisher** on the `metricchrono` project pointing at this
+  repository and workflow `release.yml`. It uses OIDC, so no PyPI token is
+  stored. To use a token instead, add repo secret `PYPI_API_TOKEN` and give the
+  PyPI publish step `password: ${{ secrets.PYPI_API_TOKEN }}`.
+
+### Recommended hardening (optional)
+
+- Add a protected `release` environment (Settings → Environments) with required
+  reviewers and reference it from the publish jobs, so every real publish needs a
+  human approval. Protect the `v*` tag pattern so only maintainers can push
+  release tags.
+- Drop the long-lived tokens by migrating npm and crates.io to **OIDC trusted
+  publishing** (both now support it, as PyPI already does here) — then no
+  `NPM_TOKEN` or `CARGO_REGISTRY_TOKEN` secret is stored at all.
+
+The sections below are the manual fallback and the reference for what the
+workflow automates.
+
 ## Repository
 
 Before making the repository public:
