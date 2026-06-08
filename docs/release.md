@@ -40,16 +40,19 @@ publish steps are idempotent — already-published crates and versions are skipp
 
 ### One-time setup
 
-- Repo secret `CARGO_REGISTRY_TOKEN` — a crates.io API token.
-- An npm **trusted publisher** on `@metricchrono/core` (npmjs.com → the package →
-  Settings → Trusted Publisher → GitHub Actions): organization `chrono-metrics`,
-  repository `metricchrono`, workflow `release.yml`. OIDC, so no npm token is
-  stored (the `publish-npm` job carries `id-token: write` and upgrades npm to a
-  trusted-publishing-capable version).
-- A PyPI **trusted publisher** on the `metricchrono` project (pypi.org → Your
-  projects → metricchrono → Manage → Publishing → Add a new publisher → GitHub):
-  owner `chrono-metrics`, repository `metricchrono`, workflow `release.yml`.
-  OIDC, so no PyPI token is stored.
+All three registries publish via **OIDC trusted publishing — no tokens are
+stored as repo secrets.** Configure one trusted publisher per registry, each
+pointing at owner `chrono-metrics`, repository `metricchrono`, workflow
+`release.yml`:
+
+- **crates.io** → the crate → Settings → Trusted Publishing → add a GitHub
+  Actions publisher. The `publish-crates` job mints a short-lived token via
+  `rust-lang/crates-io-auth-action` (`id-token: write`).
+- **npm** → `@metricchrono/core` → Settings → Trusted Publisher → GitHub
+  Actions. The `publish-npm` job carries `id-token: write` and upgrades npm to a
+  trusted-publishing-capable version.
+- **PyPI** → Your projects → metricchrono → Manage → Publishing → Add a new
+  publisher → GitHub. The `publish-pypi` job carries `id-token: write`.
 
 ### Recommended hardening (optional)
 

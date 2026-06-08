@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 (2026-06-09)
+
+- Added: Pre-built binary wheels on PyPI for Linux (manylinux x86_64 and
+  aarch64), macOS (Intel and Apple Silicon), and Windows (x86_64), so
+  `pip install metricchrono` no longer requires a Rust toolchain on those
+  platforms. The source distribution still builds from source (and so still
+  requires Cargo). No API changes.
+
 ## 0.2.0 (2026-06-08)
 
 - BREAKING: Removed the empty `metricchrono-consensus` and `metricchrono-log`
