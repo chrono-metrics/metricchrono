@@ -25,12 +25,10 @@ pub use ladder::{
     tick_distance, try_tick_distance, validate_ladder, Ladder, Normalization, PromotionCounter,
     TickVector,
 };
+pub use metrics::{ladder_pair, tick_pair, Absolute, Euclidean, Metric, MetricFn};
 #[cfg(feature = "metrics-extra")]
 pub use metrics::{
     Cosine, DiagonalMahalanobis, JensenShannon, KullbackLeibler, Manhattan, SquaredEuclidean,
-};
-pub use metrics::{
-    ladder_pair, tick_pair, Absolute, Euclidean, Metric, MetricFn,
 };
 pub use schema::{ConsensusResultDocument, LadderDocument, TickVectorDocument, TierDocument};
 pub use smooth::{
