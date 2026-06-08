@@ -14,5 +14,5 @@ def test_cross_language_golden_vectors() -> None:
 
 
 def test_public_api_and_schema_helpers() -> None:
-    golden.test_public_api_surface()
+    golden.test_binding_conformance_fixture()
     golden.test_schema_round_trip()

@@ -8,40 +8,35 @@ import {
   PromotionCounter,
   absoluteDistance,
   adaptiveLadderDistance,
-  adaptiveZoomWindow,
   carryRules,
-  coherenceResidual,
-  coherenceResiduals,
   consensusResultFromSchema,
-  cosineDistance,
-  diagonalMahalanobisDistance,
+  customLadder,
   euclideanDistance,
   geometricLadder,
-  jensenShannonDistance,
-  kullbackLeiblerDistance,
-  ladderFromSchema,
   ladderDistance,
-  ladderToSchema,
+  ladderFromSchema,
   ladderPair,
-  manhattanDistance,
+  ladderToSchema,
   normalizeTicks,
-  simpleWeightUpdate,
   smoothLadderDistance,
   smoothTickDistance,
-  squaredEuclideanDistance,
   tickDistance,
+  tickPair,
   tickVectorFromSchema,
   tickVectorToSchema,
-  tickPair,
   tier,
   tierFromSchema,
   tierToSchema,
+  validateLadder,
   weightedConsensus,
 } from "../src/index.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../crates/metricchrono-core");
 const repoRoot = resolve(root, "../..");
 const eps = 1e-12;
+const fixture = readJson(resolve(root, "fixtures/binding_conformance.v1.json"));
+
+assert.equal(fixture.metricchrono_schema, "binding_conformance.v1");
 
 for (const row of readCsv("fixtures/golden_ticks.csv").slice(1)) {
   const t = tier(number(row[2]), number(row[3]), number(row[4]), number(row[5]));
@@ -59,106 +54,291 @@ for (const row of readCsv("fixtures/golden_ladders.csv").slice(1)) {
   );
   const actual = ladderDistance(number(row[1]), ladder);
   const expected = row[8].split(";").map(number);
-  assert.equal(actual.length, expected.length, row[0]);
-  for (let index = 0; index < actual.length; index += 1) {
-    assertClose(`${row[0]}[${index}]`, actual[index], expected[index]);
+  assertVectorClose(row[0], actual, expected);
+}
+
+const ladders = buildLadders(fixture);
+
+for (const testCase of fixture.tick_distance_cases) {
+  const t = tierFromDoc(testCase.tier);
+  assertClose(testCase.name, tickDistance(testCase.distance, t), testCase.expected);
+}
+
+for (const testCase of fixture.smooth_tick_distance_cases) {
+  assertClose(
+    testCase.name,
+    smoothTickDistance(testCase.distance, tierFromDoc(testCase.tier), testCase.sharpness),
+    testCase.expected,
+  );
+}
+
+for (const testCase of fixture.smooth_ladder_distance_cases) {
+  assertVectorClose(
+    testCase.name,
+    smoothLadderDistance(testCase.distance, ladders.get(testCase.ladder), testCase.sharpness),
+    testCase.expected,
+  );
+}
+
+for (const testCase of fixture.adaptive_ladder_distance_cases) {
+  const actual = adaptiveLadderDistance(testCase.distance, ladders.get(testCase.ladder));
+  assertVectorClose(testCase.name, actual.ticks, testCase.expected.ticks);
+  assert.equal(actual.decision.evaluatedTiers, testCase.expected.decision.evaluated_tiers);
+  assert.equal(actual.decision.firstInactiveTier, testCase.expected.decision.first_inactive_tier);
+  assert.equal(actual.decision.stoppedEarly, testCase.expected.decision.stopped_early);
+}
+
+for (const testCase of fixture.weighted_consensus_cases) {
+  assertVectorClose(
+    testCase.name,
+    weightedConsensus(testCase.vectors, testCase.weights),
+    testCase.expected,
+  );
+}
+
+for (const testCase of fixture.event_log_cases) {
+  assertEventLogCase(testCase);
+}
+
+for (const testCase of fixture.metric_cases.euclidean_distance) {
+  assertClose(testCase.name, euclideanDistance(testCase.a, testCase.b), testCase.expected);
+}
+
+for (const testCase of fixture.metric_cases.absolute_distance) {
+  assertClose(testCase.name, absoluteDistance(testCase.a, testCase.b), testCase.expected);
+}
+
+for (const testCase of fixture.pair_cases.tick_pair) {
+  assertClose(
+    testCase.name,
+    tickPair(testCase.a, testCase.b, metricFromName(testCase.metric), tierFromDoc(testCase.tier)),
+    testCase.expected,
+  );
+}
+
+for (const testCase of fixture.pair_cases.ladder_pair) {
+  assertVectorClose(
+    testCase.name,
+    ladderPair(testCase.a, testCase.b, metricFromName(testCase.metric), ladders.get(testCase.ladder)),
+    testCase.expected,
+  );
+}
+
+for (const testCase of fixture.normalize_ticks_cases) {
+  assertVectorClose(
+    testCase.name,
+    normalizeTicks(testCase.input, normalizationMode(testCase.mode)),
+    testCase.expected,
+  );
+}
+
+for (const testCase of fixture.carry_rules_cases) {
+  assert.deepEqual(carryRules(testCase.epsilons), testCase.expected, testCase.name);
+}
+
+for (const testCase of fixture.promotion_counter_cases) {
+  const counter = new PromotionCounter(testCase.quotas);
+  assert.deepEqual(counter.quotas, testCase.quotas, `${testCase.name}/quotas`);
+  for (const step of testCase.steps) {
+    const actual = step.event_flags === null ? counter.step() : counter.step(step.event_flags);
+    assert.deepEqual(actual, step.promoted, `${testCase.name}/promoted`);
+    assert.deepEqual(counter.counters, step.counters, `${testCase.name}/counters`);
+  }
+  counter.reset();
+  assert.deepEqual(counter.counters, testCase.after_reset_counters, `${testCase.name}/reset`);
+}
+
+assertRejections(fixture.rejections, fixture.event_log_cases[0]);
+assertSchemaRoundTrip();
+
+function buildLadders(source) {
+  const out = new Map();
+  for (const testCase of source.ladders) {
+    const expected = testCase.tiers.map(tierFromDoc);
+    let actual;
+    if (testCase.kind === "geometric") {
+      const params = testCase.params;
+      actual = geometricLadder(
+        params.epsilon0,
+        params.delta0,
+        params.ratio,
+        params.tiers,
+        params.p,
+        params.epsilon_ref,
+      );
+    } else if (testCase.kind === "custom") {
+      actual = customLadder(expected);
+    } else {
+      throw new Error(`unknown ladder kind ${testCase.kind}`);
+    }
+
+    validateLadder(actual);
+    assert.equal(actual.length, expected.length, `${testCase.name}/tiers`);
+    for (let index = 0; index < actual.length; index += 1) {
+      assertClose(`${testCase.name}[${index}].epsilon`, actual[index].epsilon, expected[index].epsilon);
+      assertClose(`${testCase.name}[${index}].delta`, actual[index].delta, expected[index].delta);
+      assertClose(`${testCase.name}[${index}].p`, actual[index].p, expected[index].p);
+      assertClose(
+        `${testCase.name}[${index}].epsilonRef`,
+        actual[index].epsilonRef,
+        expected[index].epsilonRef,
+      );
+    }
+    for (const distanceCase of testCase.distances) {
+      assertVectorClose(
+        `${testCase.name}/ladderDistance`,
+        ladderDistance(distanceCase.distance, actual),
+        distanceCase.expected,
+      );
+    }
+    out.set(testCase.name, actual);
+  }
+  return out;
+}
+
+function assertEventLogCase(testCase) {
+  const log = new EventLog(testCase.tier_count);
+  assert.equal(log.length === 0, testCase.is_empty_before_append, `${testCase.name}/isEmptyBefore`);
+  for (const record of testCase.append_records) {
+    assert.equal(log.append(record.state_id, record.ticks), record.expected_index);
+  }
+  assert.equal(log.length, testCase.expected_len, `${testCase.name}/length`);
+  assert.equal(log.length === 0, testCase.is_empty_after_append, `${testCase.name}/isEmptyAfter`);
+  assert.equal(log.tierCount, testCase.tier_count, `${testCase.name}/tierCount`);
+
+  for (const expected of testCase.records) {
+    const actual = log.records[expected.index];
+    assert.equal(actual.stateId, expected.state_id, `${testCase.name}/recordState`);
+    assertVectorClose(`${testCase.name}/record[${expected.index}]`, actual.ticks, expected.ticks);
+  }
+
+  for (const expected of testCase.first_events) {
+    assert.equal(log.firstEvent(expected.tier), expected.expected, `${testCase.name}/firstEvent`);
+  }
+
+  for (const expected of testCase.next_events) {
+    assert.equal(
+      log.nextEvent(expected.index, expected.tier),
+      expected.expected,
+      `${testCase.name}/nextEvent`,
+    );
+  }
+
+  for (const summary of testCase.compact_summaries) {
+    const actual = log.compactSummary(summary.tier);
+    assert.equal(actual.length, summary.expected.length, `${testCase.name}/summaryLength`);
+    for (let index = 0; index < actual.length; index += 1) {
+      assert.equal(actual[index].index, summary.expected[index].index);
+      assert.equal(actual[index].stateId, summary.expected[index].state_id);
+      assertClose("compact summary tick", actual[index].tick, summary.expected[index].tick);
+    }
   }
 }
 
-const ladder = geometricLadder(0.5, 1.0, 2.0, 4, 0.5, 1.0);
-assert.equal(smoothTickDistance(0.95, tier(1.0, 2.0, 0.5, 1.0), 10.0) > 0, true);
-assert.equal(smoothLadderDistance(2.0, ladder, 10.0).length, 4);
-assert.deepEqual(normalizeTicks([10, 5, 3], Normalization.UnitMax), [1, 0.5, 0.3]);
-assert.deepEqual(carryRules([0.1, 1.2, 3.0]), [1, 2, 3]);
+function assertRejections(rejections, eventCase) {
+  for (const testCase of rejections.invalid_tiers) {
+    assert.throws(
+      () => tier(testCase.epsilon, testCase.delta, testCase.p, testCase.epsilon_ref),
+      undefined,
+      testCase.name,
+    );
+  }
 
-const promote = new PromotionCounter([2, 3]);
-assert.deepEqual(promote.step([false, false]), [false, false]);
-assert.deepEqual(promote.counters, [1, 1]);
-assert.deepEqual(promote.step([false, false]), [true, true]);
-assert.deepEqual(promote.counters, [0, 0]);
+  for (const testCase of rejections.unknown_schema_documents) {
+    if (testCase.kind === "tier") {
+      assert.throws(() => tierFromSchema(testCase.document), undefined, testCase.name);
+    } else {
+      throw new Error(`unknown schema rejection kind ${testCase.kind}`);
+    }
+  }
 
-const adaptive = adaptiveLadderDistance(0.75, ladder);
-assert.equal(adaptive.decision.firstInactiveTier, 1);
-assert.equal(adaptive.decision.stoppedEarly, true);
-assert.deepEqual(adaptive.ticks.slice(1), [0, 0, 0]);
-assert.deepEqual(adaptiveZoomWindow(3.0, ladder, 1), [1, 4]);
+  const log = new EventLog(eventCase.tier_count);
+  for (const record of eventCase.append_records) {
+    log.append(record.state_id, record.ticks);
+  }
+  for (const testCase of rejections.event_log_out_of_range) {
+    if (testCase.operation === "record") {
+      assert.throws(() => {
+        const record = log.records[testCase.index];
+        if (record === undefined) {
+          throw new Error("event log index is out of bounds");
+        }
+      }, undefined, testCase.name);
+    } else if (testCase.operation === "next_event") {
+      assert.throws(() => log.nextEvent(testCase.index, testCase.tier), undefined, testCase.name);
+    } else if (testCase.operation === "first_event") {
+      assert.throws(() => log.firstEvent(testCase.tier), undefined, testCase.name);
+    } else if (testCase.operation === "compact_summary") {
+      assert.throws(() => log.compactSummary(testCase.tier), undefined, testCase.name);
+    } else {
+      throw new Error(`unknown event log rejection operation ${testCase.operation}`);
+    }
+  }
+}
 
-const log = new EventLog(3);
-assert.equal(log.append("s0", [0, 0, 0]), 0);
-assert.equal(log.append("s1", [1, 0, 0]), 1);
-assert.equal(log.append("s2", [0, 2, 0]), 2);
-assert.equal(log.append("s3", [1, 1, 0]), 3);
-assert.equal(log.firstEvent(0), 1);
-assert.equal(log.nextEvent(1, 0), 3);
-assert.deepEqual(
-  Array.from(log.iterEvents(0), ([index]) => index),
-  [1, 3],
-);
-assert.deepEqual(log.compactSummary(1).map((item) => item.stateId), ["s2", "s3"]);
+function assertSchemaRoundTrip() {
+  const tierDoc = {
+    metricchrono_schema: "tier.v1",
+    epsilon: 0.03,
+    delta: 0.1,
+    p: 0.0,
+    epsilon_ref: 1.0,
+  };
+  const schemaTier = tierFromSchema(tierDoc);
+  assert.deepEqual(tierToSchema(schemaTier), tierDoc);
 
-const consensus = weightedConsensus(
-  [
-    [1, 2],
-    [3, 0],
-  ],
-  [0.25, 0.75],
-);
-assert.deepEqual(consensus, [2.5, 0.5]);
-assert.equal(coherenceResidual([1, 2], consensus) > 0, true);
-const residuals = coherenceResiduals(
-  [
-    [1, 2],
-    [3, 0],
-  ],
-  consensus,
-);
-assertClose("updated weights sum", simpleWeightUpdate([0.5, 0.5], residuals, 0.2, 0.01).reduce(sum, 0), 1);
+  const ladderDoc = readJson(resolve(repoRoot, "tests/golden/ladder.v1.json"));
+  const schemaLadder = ladderFromSchema(ladderDoc);
+  assert.deepEqual(ladderDistance(1.0, schemaLadder), [10, 4, 2]);
+  assert.deepEqual(ladderToSchema(schemaLadder), ladderDoc);
 
-assertClose("euclidean", euclideanDistance([0, 0], [3, 4]), 5);
-assertClose("squaredEuclidean", squaredEuclideanDistance([0, 0], [3, 4]), 25);
-assertClose("absolute", absoluteDistance(2, 5.5), 3.5);
-assertClose("manhattan", manhattanDistance([0, 0], [3, 4]), 7);
-assertClose("cosine", cosineDistance([1, 0], [0, 1]), 1);
-assert.equal(kullbackLeiblerDistance([0.2, 0.8], [0.5, 0.5]) > 0, true);
-assert.equal(jensenShannonDistance([0.2, 0.8], [0.5, 0.5]) > 0, true);
-assertClose(
-  "diagonalMahalanobis",
-  diagonalMahalanobisDistance([0, 0], [4, 3], [0.25, 1.0]),
-  Math.sqrt(13),
-);
-assertClose("tickPair", tickPair([0, 0], [3, 4], euclideanDistance, tier(0.5, 1.0, 0, 1)), 5);
-assert.throws(() => tier(1.0, 1.0, 0, 1));
-assert.throws(() => tickDistance(-1, tier(0.5, 1.0, 0, 1)));
-assert.throws(() =>
-  ladderDistance(1, [tier(0.5, 1.0, 0, 1), tier(0.75, 0.9, 0, 1)]),
-);
-assert.throws(() => tickPair([0, 0], [1], euclideanDistance, tier(0.5, 1.0, 0, 1)));
-assert.deepEqual(ladderPair([0, 0], [3, 4], euclideanDistance, ladder).length, 4);
+  const tickDoc = readJson(resolve(repoRoot, "tests/golden/tick_vector.v1.json"));
+  const schemaTicks = tickVectorFromSchema(tickDoc);
+  assert.deepEqual(schemaTicks, [10, 4, 2]);
+  assert.deepEqual(tickVectorToSchema(schemaTicks), tickDoc);
 
-const tierDoc = {
-  metricchrono_schema: "tier.v1",
-  epsilon: 0.03,
-  delta: 0.1,
-  p: 0.0,
-  epsilon_ref: 1.0,
-};
-const schemaTier = tierFromSchema(tierDoc);
-assert.deepEqual(tierToSchema(schemaTier), tierDoc);
+  const consensusDoc = readJson(resolve(repoRoot, "tests/golden/consensus_result.v1.json"));
+  assert.deepEqual(consensusResultFromSchema(consensusDoc), consensusDoc);
 
-const ladderDoc = readJson("tests/golden/ladder.v1.json");
-const schemaLadder = ladderFromSchema(ladderDoc);
-assert.deepEqual(ladderDistance(1.0, schemaLadder), [10, 4, 2]);
-assert.deepEqual(ladderToSchema(schemaLadder), ladderDoc);
+  assert.throws(() => ladderFromSchema({ ...ladderDoc, metricchrono_schema: "ladder.v2" }));
+}
 
-const tickDoc = readJson("tests/golden/tick_vector.v1.json");
-const schemaTicks = tickVectorFromSchema(tickDoc);
-assert.deepEqual(schemaTicks, [10, 4, 2]);
-assert.deepEqual(tickVectorToSchema(schemaTicks), tickDoc);
+function metricFromName(name) {
+  if (name === "euclidean") {
+    return euclideanDistance;
+  }
+  if (name === "absolute") {
+    return absoluteDistance;
+  }
+  if (name === "max_abs") {
+    return maxAbsDistance;
+  }
+  throw new Error(`unknown metric ${name}`);
+}
 
-const consensusDoc = readJson("tests/golden/consensus_result.v1.json");
-assert.deepEqual(consensusResultFromSchema(consensusDoc), consensusDoc);
+function maxAbsDistance(a, b) {
+  if (a.length !== b.length) {
+    return Number.NaN;
+  }
+  return a.map((value, index) => Math.abs(value - b[index])).reduce((left, right) => Math.max(left, right), 0);
+}
 
-assert.throws(() => ladderFromSchema({ ...ladderDoc, metricchrono_schema: "ladder.v2" }));
+function normalizationMode(mode) {
+  if (mode === "none") {
+    return Normalization.None;
+  }
+  if (mode === "unit_max") {
+    return Normalization.UnitMax;
+  }
+  if (mode === "tanh") {
+    return Normalization.Tanh;
+  }
+  throw new Error(`unknown normalization ${mode}`);
+}
+
+function tierFromDoc(document) {
+  return tier(document.epsilon, document.delta, document.p, document.epsilon_ref);
+}
 
 function readCsv(path) {
   return readFileSync(resolve(root, path), "utf8")
@@ -168,17 +348,20 @@ function readCsv(path) {
 }
 
 function readJson(path) {
-  return JSON.parse(readFileSync(resolve(repoRoot, path), "utf8"));
+  return JSON.parse(readFileSync(path, "utf8"));
 }
 
 function number(value) {
   return Number.parseFloat(value);
 }
 
-function assertClose(name, actual, expected) {
-  assert.ok(Math.abs(actual - expected) <= eps, `${name}: expected ${expected}, got ${actual}`);
+function assertVectorClose(name, actual, expected) {
+  assert.equal(actual.length, expected.length, `${name}: length mismatch`);
+  for (let index = 0; index < actual.length; index += 1) {
+    assertClose(`${name}[${index}]`, actual[index], expected[index]);
+  }
 }
 
-function sum(left, right) {
-  return left + right;
+function assertClose(name, actual, expected) {
+  assert.ok(Math.abs(actual - expected) <= eps, `${name}: expected ${expected}, got ${actual}`);
 }
