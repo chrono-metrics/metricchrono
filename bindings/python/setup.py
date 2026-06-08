@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 
 from setuptools import setup
+from setuptools.dist import Distribution
 from setuptools.command.build_py import build_py as _build_py
 from setuptools.command.sdist import sdist as _sdist
 
@@ -98,7 +99,23 @@ if _bdist_wheel is not None:
             super().finalize_options()
             self.root_is_pure = False
 
+        def get_tag(self) -> tuple[str, str, str]:
+            # The wheel bundles a prebuilt cdylib loaded via ctypes — it is
+            # platform-specific but has no CPython ABI link, so a single wheel
+            # works on every Python 3.x. Tag it py3-none-<platform>, not cpXY.
+            _, _, plat = super().get_tag()
+            return "py3", "none", plat
+
     cmdclass["bdist_wheel"] = bdist_wheel
 
 
-setup(cmdclass=cmdclass)
+class _BinaryDistribution(Distribution):
+    # Force a platform (platlib) wheel so the bundled cdylib lands inside the
+    # package dir, where auditwheel/delocate can find it and retag the wheel to
+    # manylinux/macOS. There is no real extension module; the bdist_wheel
+    # get_tag override keeps the wheel tag py3-none.
+    def has_ext_modules(self) -> bool:
+        return True
+
+
+setup(cmdclass=cmdclass, distclass=_BinaryDistribution)

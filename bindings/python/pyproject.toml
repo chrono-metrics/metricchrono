@@ -33,3 +33,20 @@ include = ["metricchrono"]
 
 [tool.setuptools.package-data]
 metricchrono = ["*.dylib", "*.so", "*.dll", "py.typed"]
+
+[tool.cibuildwheel]
+# This is a ctypes binding bundling a prebuilt Rust cdylib, so the wheel is
+# platform-specific but Python-version-independent (py3-none-<platform>, via
+# setup.py get_tag). Build with one interpreter per platform — the wheel it
+# emits serves every Python 3.9+.
+build = "cp312-*"
+# manylinux (glibc) covers Colab + standard Docker; skip Alpine/musl for now
+# (musl + Rust is a separate follow-up).
+skip = "*-musllinux_*"
+test-command = "python -c \"import metricchrono as mc; print(mc.tick_distance(1.2, mc.Tier(0.5, 1.0, 0.5, 1.0)))\""
+
+[tool.cibuildwheel.linux]
+# Linux wheels build inside the manylinux container, which has no Rust toolchain
+# (the macOS/Windows GitHub runners already ship Rust). Install it + expose cargo.
+before-all = "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal"
+environment = { PATH = "$HOME/.cargo/bin:$PATH" }
