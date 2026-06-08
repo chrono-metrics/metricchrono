@@ -6,6 +6,14 @@ Python package:
 from metricchrono import Ladder, Tier, geometric_ladder, ladder_distance, tick_distance
 ```
 
+The default Rust crate, C ABI, Python package, and JavaScript package expose the
+same v0.2 keep-set: tick distance helpers, `Tier`/`TierBuilder`, ladder
+construction and validation, ladder distance/value helpers, normalization and
+carry rules, `EventLog`, smooth distances, adaptive ladder distance,
+`weighted_consensus`, `Absolute`/`Euclidean` plus `MetricFn`, `tick_pair` and
+`ladder_pair`, `PromotionCounter`, structured errors, and versioned schema
+helpers.
+
 Example:
 
 ```python
@@ -24,6 +32,18 @@ Expected output:
 
 The Python package bundles the platform C ABI library in wheels. Source builds
 require Cargo and a Rust toolchain.
+
+`EventLog.append` follows the append-per-timestamp contract: call it once for
+each observation, including quiet all-zero tick records. Tier events are the
+positive-tick subset of those records. Use `first_event(tier)` to find the chain
+head, then `next_event(index, tier)` or the compact summary/record readers to
+walk the tier-local event chain.
+
+Default metric helpers are limited to `Absolute`, `Euclidean`, `MetricFn`,
+`tick_pair`, and `ladder_pair`. The six extra Rust metrics
+`Cosine`, `KullbackLeibler`, `JensenShannon`, `Manhattan`,
+`SquaredEuclidean`, and `DiagonalMahalanobis` require the Rust
+`metrics-extra` feature and are absent from the default bindings.
 
 Versioned schema helpers are exported as `tier_from_schema`,
 `ladder_from_schema`, `tick_vector_from_schema`, and
