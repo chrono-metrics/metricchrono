@@ -1,14 +1,28 @@
 #![allow(clippy::missing_safety_doc)]
 
-use std::ffi::c_char;
+use std::cell::{Cell, RefCell};
+use std::ffi::{c_char, c_int};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
 
 use metricchrono_core::{
-    adaptive_ladder_distance, custom_ladder, geometric_ladder, ladder_distance,
-    simple_weight_update, smooth_tick_distance, tick_distance, weighted_consensus, EventLog,
-    SmoothParams, Tier,
+    adaptive_ladder_distance, carry_rules, custom_ladder, geometric_ladder, ladder_distance,
+    ladder_pair, normalize_ticks, simple_weight_update, smooth_tick_distance, tick_distance,
+    tick_pair, validate_ladder, weighted_consensus, Absolute, Euclidean, EventLog, Metric,
+    MetricChronoError, Normalization, PromotionCounter, SmoothParams, Tier,
 };
+
+const MC_METRIC_EUCLIDEAN: c_int = 0;
+const MC_METRIC_ABSOLUTE: c_int = 1;
+
+const MC_NORMALIZATION_NONE: c_int = 0;
+const MC_NORMALIZATION_UNIT_MAX: c_int = 1;
+const MC_NORMALIZATION_TANH: c_int = 2;
+
+thread_local! {
+    static LAST_ERROR: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+    static LAST_ERROR_SET_IN_CALL: Cell<bool> = const { Cell::new(false) };
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -46,6 +60,10 @@ pub struct MCLadder {
     tiers: Vec<Tier>,
 }
 
+pub struct MCPromotionCounter {
+    inner: PromotionCounter,
+}
+
 impl From<MCTier> for Tier {
     fn from(value: MCTier) -> Self {
         Self {
@@ -72,16 +90,74 @@ fn ffi_status<F>(func: F) -> MCStatus
 where
     F: FnOnce() -> MCStatus,
 {
+    begin_ffi_call();
     match catch_unwind(AssertUnwindSafe(func)) {
-        Ok(status) => status,
-        Err(_) => MCStatus::Panic,
+        Ok(status) => finish_status(status),
+        Err(_) => {
+            set_last_error("panic");
+            MCStatus::Panic
+        }
     }
 }
 
-fn status_from_error(error: metricchrono_core::MetricChronoError) -> MCStatus {
-    match error {
-        metricchrono_core::MetricChronoError::OutputTooSmall { .. } => MCStatus::BufferTooSmall,
+fn begin_ffi_call() {
+    LAST_ERROR_SET_IN_CALL.with(|flag| flag.set(false));
+}
+
+fn set_last_error(message: impl AsRef<str>) {
+    LAST_ERROR.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        slot.clear();
+        slot.extend_from_slice(message.as_ref().as_bytes());
+    });
+    LAST_ERROR_SET_IN_CALL.with(|flag| flag.set(true));
+}
+
+fn finish_status(status: MCStatus) -> MCStatus {
+    if status != MCStatus::Ok {
+        let already_set = LAST_ERROR_SET_IN_CALL.with(Cell::get);
+        if !already_set {
+            set_last_error(status_message(status));
+        }
+    }
+    status
+}
+
+fn status_message(status: MCStatus) -> &'static str {
+    match status {
+        MCStatus::Ok => "ok",
+        MCStatus::Null => "null pointer",
+        MCStatus::InvalidArgument => "invalid argument",
+        MCStatus::BufferTooSmall => "buffer too small",
+        MCStatus::Panic => "panic",
+    }
+}
+
+fn status_from_error(error: MetricChronoError) -> MCStatus {
+    let status = match error {
+        MetricChronoError::OutputTooSmall { .. } => MCStatus::BufferTooSmall,
         _ => MCStatus::InvalidArgument,
+    };
+    set_last_error(error.to_string());
+    status
+}
+
+fn invalid_argument(message: &'static str) -> MCStatus {
+    status_from_error(MetricChronoError::InvalidArgument(message))
+}
+
+fn buffer_too_small(needed: usize, actual: usize) -> MCStatus {
+    status_from_error(MetricChronoError::OutputTooSmall { needed, actual })
+}
+
+fn normalization_from_id(id: c_int) -> Result<Normalization, MetricChronoError> {
+    match id {
+        MC_NORMALIZATION_NONE => Ok(Normalization::None),
+        MC_NORMALIZATION_UNIT_MAX => Ok(Normalization::UnitMax),
+        MC_NORMALIZATION_TANH => Ok(Normalization::Tanh),
+        _ => Err(MetricChronoError::InvalidArgument(
+            "unknown normalization id",
+        )),
     }
 }
 
@@ -93,6 +169,46 @@ pub extern "C" fn mc_error_message(status: MCStatus) -> *const c_char {
         MCStatus::InvalidArgument => b"invalid argument\0".as_ptr().cast(),
         MCStatus::BufferTooSmall => b"buffer too small\0".as_ptr().cast(),
         MCStatus::Panic => b"panic\0".as_ptr().cast(),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_last_error_message(
+    buf: *mut c_char,
+    cap: usize,
+    out_len: *mut usize,
+) -> MCStatus {
+    match catch_unwind(AssertUnwindSafe(|| {
+        let Some(out_len) = (unsafe { out_len.as_mut() }) else {
+            set_last_error("null pointer");
+            return MCStatus::Null;
+        };
+
+        let needed = LAST_ERROR.with(|slot| slot.borrow().len() + 1);
+        *out_len = needed;
+        if cap < needed {
+            return MCStatus::BufferTooSmall;
+        }
+
+        if buf.is_null() {
+            set_last_error("null pointer");
+            return MCStatus::Null;
+        }
+
+        LAST_ERROR.with(|slot| {
+            let message = slot.borrow();
+            unsafe {
+                ptr::copy_nonoverlapping(message.as_ptr().cast::<c_char>(), buf, message.len());
+                *buf.add(message.len()) = 0;
+            }
+        });
+        MCStatus::Ok
+    })) {
+        Ok(status) => status,
+        Err(_) => {
+            set_last_error("panic");
+            MCStatus::Panic
+        }
     }
 }
 
@@ -113,6 +229,20 @@ unsafe fn slice_from_mut_ptr<'a, T>(ptr: *mut T, len: usize) -> Option<&'a mut [
         None
     } else {
         Some(std::slice::from_raw_parts_mut(ptr, len))
+    }
+}
+
+fn create_ladder(tiers: &[MCTier], out: &mut *mut MCLadder) -> MCStatus {
+    let tiers: Vec<Tier> = tiers.iter().copied().map(Tier::from).collect();
+    match custom_ladder(tiers) {
+        Ok(tiers) => {
+            *out = Box::into_raw(Box::new(MCLadder { tiers }));
+            MCStatus::Ok
+        }
+        Err(error) => {
+            *out = ptr::null_mut();
+            status_from_error(error)
+        }
     }
 }
 
@@ -151,17 +281,24 @@ pub unsafe extern "C" fn mc_ladder_new(
         let Some(tiers) = (unsafe { slice_from_ptr(tiers, len) }) else {
             return MCStatus::Null;
         };
-        let tiers: Vec<Tier> = tiers.iter().copied().map(Tier::from).collect();
-        match custom_ladder(tiers) {
-            Ok(tiers) => {
-                *out = Box::into_raw(Box::new(MCLadder { tiers }));
-                MCStatus::Ok
-            }
-            Err(error) => {
-                *out = ptr::null_mut();
-                status_from_error(error)
-            }
-        }
+        create_ladder(tiers, out)
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_custom_ladder(
+    tiers: *const MCTier,
+    len: usize,
+    out: *mut *mut MCLadder,
+) -> MCStatus {
+    ffi_status(|| {
+        let Some(out) = (unsafe { out.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        let Some(tiers) = (unsafe { slice_from_ptr(tiers, len) }) else {
+            return MCStatus::Null;
+        };
+        create_ladder(tiers, out)
     })
 }
 
@@ -186,6 +323,16 @@ pub unsafe extern "C" fn mc_ladder_len(ladder: *const MCLadder, out_len: *mut us
         };
         *out_len = ladder.tiers.len();
         MCStatus::Ok
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_validate_ladder(ladder: *const MCLadder) -> MCStatus {
+    ffi_status(|| {
+        let Some(ladder) = (unsafe { ladder.as_ref() }) else {
+            return MCStatus::Null;
+        };
+        validate_ladder(&ladder.tiers).map_or_else(status_from_error, |_| MCStatus::Ok)
     })
 }
 
@@ -226,6 +373,105 @@ pub unsafe extern "C" fn mc_tick_distance(distance: f64, tier: MCTier, out: *mut
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn mc_euclidean_distance(
+    a: *const f64,
+    b: *const f64,
+    len: usize,
+    out: *mut f64,
+) -> MCStatus {
+    ffi_status(|| {
+        let Some(out) = (unsafe { out.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        let Some(a) = (unsafe { slice_from_ptr(a, len) }) else {
+            return MCStatus::Null;
+        };
+        let Some(b) = (unsafe { slice_from_ptr(b, len) }) else {
+            return MCStatus::Null;
+        };
+        *out = Euclidean.distance(a, b);
+        MCStatus::Ok
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_absolute_distance(
+    a: *const f64,
+    b: *const f64,
+    len: usize,
+    out: *mut f64,
+) -> MCStatus {
+    ffi_status(|| {
+        if len != 1 {
+            return invalid_argument("absolute metric requires len == 1");
+        }
+        let Some(out) = (unsafe { out.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        let Some(a) = (unsafe { slice_from_ptr(a, len) }) else {
+            return MCStatus::Null;
+        };
+        let Some(b) = (unsafe { slice_from_ptr(b, len) }) else {
+            return MCStatus::Null;
+        };
+        *out = Absolute.distance(&a[0], &b[0]);
+        MCStatus::Ok
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_tick_pair(
+    metric_id: c_int,
+    a: *const f64,
+    b: *const f64,
+    len: usize,
+    tier: MCTier,
+    out: *mut f64,
+) -> MCStatus {
+    ffi_status(|| {
+        let Some(out) = (unsafe { out.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        match metric_id {
+            MC_METRIC_EUCLIDEAN => {
+                let Some(a) = (unsafe { slice_from_ptr(a, len) }) else {
+                    return MCStatus::Null;
+                };
+                let Some(b) = (unsafe { slice_from_ptr(b, len) }) else {
+                    return MCStatus::Null;
+                };
+                match tick_pair(a, b, &Euclidean, Tier::from(tier)) {
+                    Ok(value) => {
+                        *out = value;
+                        MCStatus::Ok
+                    }
+                    Err(error) => status_from_error(error),
+                }
+            }
+            MC_METRIC_ABSOLUTE => {
+                if len != 1 {
+                    return invalid_argument("absolute metric requires len == 1");
+                }
+                let Some(a) = (unsafe { slice_from_ptr(a, len) }) else {
+                    return MCStatus::Null;
+                };
+                let Some(b) = (unsafe { slice_from_ptr(b, len) }) else {
+                    return MCStatus::Null;
+                };
+                match tick_pair(&a[0], &b[0], &Absolute, Tier::from(tier)) {
+                    Ok(value) => {
+                        *out = value;
+                        MCStatus::Ok
+                    }
+                    Err(error) => status_from_error(error),
+                }
+            }
+            _ => invalid_argument("unknown metric id"),
+        }
+    })
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn mc_ladder_distance(
     distance: f64,
     tiers: *const MCTier,
@@ -242,6 +488,59 @@ pub unsafe extern "C" fn mc_ladder_distance(
         };
         let tiers: Vec<Tier> = tiers.iter().copied().map(Tier::from).collect();
         ladder_distance(distance, &tiers, out).map_or_else(status_from_error, |_| MCStatus::Ok)
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_ladder_pair(
+    metric_id: c_int,
+    a: *const f64,
+    b: *const f64,
+    len: usize,
+    ladder: *const MCLadder,
+    out: *mut f64,
+    cap: usize,
+    out_len: *mut usize,
+) -> MCStatus {
+    ffi_status(|| {
+        if metric_id != MC_METRIC_EUCLIDEAN && metric_id != MC_METRIC_ABSOLUTE {
+            return invalid_argument("unknown metric id");
+        }
+        if metric_id == MC_METRIC_ABSOLUTE && len != 1 {
+            return invalid_argument("absolute metric requires len == 1");
+        }
+        let Some(ladder) = (unsafe { ladder.as_ref() }) else {
+            return MCStatus::Null;
+        };
+        let Some(out_len) = (unsafe { out_len.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        let needed = ladder.tiers.len();
+        *out_len = needed;
+        if cap < needed {
+            return buffer_too_small(needed, cap);
+        }
+        let Some(out) = (unsafe { slice_from_mut_ptr(out, cap) }) else {
+            return MCStatus::Null;
+        };
+        let Some(a) = (unsafe { slice_from_ptr(a, len) }) else {
+            return MCStatus::Null;
+        };
+        let Some(b) = (unsafe { slice_from_ptr(b, len) }) else {
+            return MCStatus::Null;
+        };
+        let values = match metric_id {
+            MC_METRIC_EUCLIDEAN => ladder_pair(a, b, &Euclidean, &ladder.tiers),
+            MC_METRIC_ABSOLUTE => ladder_pair(&a[0], &b[0], &Absolute, &ladder.tiers),
+            _ => unreachable!(),
+        };
+        match values {
+            Ok(values) => {
+                out[..needed].copy_from_slice(&values);
+                MCStatus::Ok
+            }
+            Err(error) => status_from_error(error),
+        }
     })
 }
 
@@ -289,8 +588,9 @@ pub unsafe extern "C" fn mc_smooth_tick_distance(
         let Some(out) = (unsafe { out.as_mut() }) else {
             return MCStatus::Null;
         };
-        let Ok(params) = SmoothParams::sharpness(sharpness) else {
-            return MCStatus::InvalidArgument;
+        let params = match SmoothParams::sharpness(sharpness) {
+            Ok(params) => params,
+            Err(error) => return status_from_error(error),
         };
         match smooth_tick_distance(distance, Tier::from(tier), params) {
             Ok(value) => {
@@ -315,7 +615,7 @@ pub unsafe extern "C" fn mc_geometric_ladder(
 ) -> MCStatus {
     ffi_status(|| {
         if out_len < tiers {
-            return MCStatus::BufferTooSmall;
+            return buffer_too_small(tiers, out_len);
         }
         let Some(out) = (unsafe { slice_from_mut_ptr(out, out_len) }) else {
             return MCStatus::Null;
@@ -333,6 +633,60 @@ pub unsafe extern "C" fn mc_geometric_ladder(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn mc_normalize_ticks(
+    ticks: *const f64,
+    len: usize,
+    normalization_id: c_int,
+    out: *mut f64,
+) -> MCStatus {
+    ffi_status(|| {
+        let mode = match normalization_from_id(normalization_id) {
+            Ok(mode) => mode,
+            Err(error) => return status_from_error(error),
+        };
+        let Some(ticks) = (unsafe { slice_from_ptr(ticks, len) }) else {
+            return MCStatus::Null;
+        };
+        let Some(out) = (unsafe { slice_from_mut_ptr(out, len) }) else {
+            return MCStatus::Null;
+        };
+        normalize_ticks(ticks, mode, out).map_or_else(status_from_error, |_| MCStatus::Ok)
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_carry_rules(
+    epsilons: *const f64,
+    len: usize,
+    out: *mut u64,
+    cap: usize,
+    out_len: *mut usize,
+) -> MCStatus {
+    ffi_status(|| {
+        let Some(epsilons) = (unsafe { slice_from_ptr(epsilons, len) }) else {
+            return MCStatus::Null;
+        };
+        let Some(out_len) = (unsafe { out_len.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        let rules = match carry_rules(epsilons) {
+            Ok(rules) => rules,
+            Err(error) => return status_from_error(error),
+        };
+        let needed = rules.len();
+        *out_len = needed;
+        if cap < needed {
+            return buffer_too_small(needed, cap);
+        }
+        let Some(out) = (unsafe { slice_from_mut_ptr(out, cap) }) else {
+            return MCStatus::Null;
+        };
+        out[..needed].copy_from_slice(&rules);
+        MCStatus::Ok
+    })
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn mc_weighted_consensus(
     vectors: *const f64,
     rows: usize,
@@ -343,7 +697,7 @@ pub unsafe extern "C" fn mc_weighted_consensus(
 ) -> MCStatus {
     ffi_status(|| {
         if rows == 0 || cols == 0 {
-            return MCStatus::InvalidArgument;
+            return invalid_argument("rows and cols must be > 0");
         }
         let Some(vectors) = (unsafe { slice_from_ptr(vectors, rows.saturating_mul(cols)) }) else {
             return MCStatus::Null;
@@ -380,14 +734,188 @@ pub unsafe extern "C" fn mc_simple_weight_update(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn mc_promotion_counter_new(
+    quotas: *const u64,
+    len: usize,
+    out: *mut *mut MCPromotionCounter,
+) -> MCStatus {
+    ffi_status(|| {
+        let Some(out) = (unsafe { out.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        let Some(quotas) = (unsafe { slice_from_ptr(quotas, len) }) else {
+            return MCStatus::Null;
+        };
+        match PromotionCounter::new(quotas.to_vec()) {
+            Ok(inner) => {
+                *out = Box::into_raw(Box::new(MCPromotionCounter { inner }));
+                MCStatus::Ok
+            }
+            Err(error) => {
+                *out = ptr::null_mut();
+                status_from_error(error)
+            }
+        }
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_promotion_counter_from_epsilons(
+    epsilons: *const f64,
+    len: usize,
+    out: *mut *mut MCPromotionCounter,
+) -> MCStatus {
+    ffi_status(|| {
+        let Some(out) = (unsafe { out.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        let Some(epsilons) = (unsafe { slice_from_ptr(epsilons, len) }) else {
+            return MCStatus::Null;
+        };
+        match PromotionCounter::from_epsilons(epsilons) {
+            Ok(inner) => {
+                *out = Box::into_raw(Box::new(MCPromotionCounter { inner }));
+                MCStatus::Ok
+            }
+            Err(error) => {
+                *out = ptr::null_mut();
+                status_from_error(error)
+            }
+        }
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_promotion_counter_step(
+    counter: *mut MCPromotionCounter,
+    event_flags: *const bool,
+    flags_len: usize,
+    out: *mut bool,
+    cap: usize,
+    out_len: *mut usize,
+) -> MCStatus {
+    ffi_status(|| {
+        let Some(counter) = (unsafe { counter.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        let Some(out_len) = (unsafe { out_len.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        let needed = counter.inner.len();
+        *out_len = needed;
+        if cap < needed {
+            return buffer_too_small(needed, cap);
+        }
+        let flags = if event_flags.is_null() && flags_len == 0 {
+            None
+        } else {
+            let Some(flags) = (unsafe { slice_from_ptr(event_flags, flags_len) }) else {
+                return MCStatus::Null;
+            };
+            Some(flags)
+        };
+        let Some(out) = (unsafe { slice_from_mut_ptr(out, cap) }) else {
+            return MCStatus::Null;
+        };
+        counter
+            .inner
+            .step(flags, out)
+            .map_or_else(status_from_error, |_| MCStatus::Ok)
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_promotion_counter_counters(
+    counter: *const MCPromotionCounter,
+    out: *mut u64,
+    cap: usize,
+    out_len: *mut usize,
+) -> MCStatus {
+    ffi_status(|| {
+        let Some(counter) = (unsafe { counter.as_ref() }) else {
+            return MCStatus::Null;
+        };
+        let Some(out_len) = (unsafe { out_len.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        let counters = counter.inner.counters();
+        let needed = counters.len();
+        *out_len = needed;
+        if cap < needed {
+            return buffer_too_small(needed, cap);
+        }
+        let Some(out) = (unsafe { slice_from_mut_ptr(out, cap) }) else {
+            return MCStatus::Null;
+        };
+        out[..needed].copy_from_slice(counters);
+        MCStatus::Ok
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_promotion_counter_quotas(
+    counter: *const MCPromotionCounter,
+    out: *mut u64,
+    cap: usize,
+    out_len: *mut usize,
+) -> MCStatus {
+    ffi_status(|| {
+        let Some(counter) = (unsafe { counter.as_ref() }) else {
+            return MCStatus::Null;
+        };
+        let Some(out_len) = (unsafe { out_len.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        let quotas = counter.inner.quotas();
+        let needed = quotas.len();
+        *out_len = needed;
+        if cap < needed {
+            return buffer_too_small(needed, cap);
+        }
+        let Some(out) = (unsafe { slice_from_mut_ptr(out, cap) }) else {
+            return MCStatus::Null;
+        };
+        out[..needed].copy_from_slice(quotas);
+        MCStatus::Ok
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_promotion_counter_reset(counter: *mut MCPromotionCounter) -> MCStatus {
+    ffi_status(|| {
+        let Some(counter) = (unsafe { counter.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        counter.inner.reset();
+        MCStatus::Ok
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_promotion_counter_free(counter: *mut MCPromotionCounter) {
+    if counter.is_null() {
+        return;
+    }
+    let _ = catch_unwind(AssertUnwindSafe(|| unsafe {
+        drop(Box::from_raw(counter));
+    }));
+}
+
+#[no_mangle]
 pub extern "C" fn mc_event_log_new(tier_count: usize) -> *mut MCEventLog {
-    match catch_unwind(AssertUnwindSafe(|| {
-        EventLog::new(tier_count)
-            .map(|inner| Box::into_raw(Box::new(MCEventLog { inner })))
-            .unwrap_or(ptr::null_mut())
+    begin_ffi_call();
+    match catch_unwind(AssertUnwindSafe(|| match EventLog::new(tier_count) {
+        Ok(inner) => Box::into_raw(Box::new(MCEventLog { inner })),
+        Err(error) => {
+            status_from_error(error);
+            ptr::null_mut()
+        }
     })) {
         Ok(ptr) => ptr,
-        Err(_) => ptr::null_mut(),
+        Err(_) => {
+            set_last_error("panic");
+            ptr::null_mut()
+        }
     }
 }
 
@@ -430,6 +958,37 @@ pub unsafe extern "C" fn mc_event_log_append(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn mc_event_log_first_event(
+    log: *const MCEventLog,
+    tier: usize,
+    out_index: *mut usize,
+    out_has: *mut bool,
+) -> MCStatus {
+    ffi_status(|| {
+        let Some(log) = (unsafe { log.as_ref() }) else {
+            return MCStatus::Null;
+        };
+        let Some(out_index) = (unsafe { out_index.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        let Some(out_has) = (unsafe { out_has.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        if tier >= log.inner.tier_count() {
+            return invalid_argument("event log tier is out of bounds");
+        }
+        if let Some(index) = log.inner.first_event(tier) {
+            *out_index = index;
+            *out_has = true;
+        } else {
+            *out_index = 0;
+            *out_has = false;
+        }
+        MCStatus::Ok
+    })
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn mc_event_log_next_event(
     log: *const MCEventLog,
     index: usize,
@@ -448,7 +1007,7 @@ pub unsafe extern "C" fn mc_event_log_next_event(
             return MCStatus::Null;
         };
         if tier >= log.inner.tier_count() || index >= log.inner.len() {
-            return MCStatus::InvalidArgument;
+            return invalid_argument("event log index or tier is out of bounds");
         }
         if let Some(next) = log.inner.next_event(index, tier) {
             *out_index = next;
@@ -456,6 +1015,86 @@ pub unsafe extern "C" fn mc_event_log_next_event(
         } else {
             *out_index = 0;
             *has_event = false;
+        }
+        MCStatus::Ok
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_event_log_record(
+    log: *const MCEventLog,
+    index: usize,
+    out_state_id: *mut u64,
+    ticks_out: *mut f64,
+    ticks_cap: usize,
+    out_ticks_len: *mut usize,
+) -> MCStatus {
+    ffi_status(|| {
+        let Some(log) = (unsafe { log.as_ref() }) else {
+            return MCStatus::Null;
+        };
+        let Some(out_ticks_len) = (unsafe { out_ticks_len.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        let Some(record) = log.inner.record(index) else {
+            return invalid_argument("event log index is out of bounds");
+        };
+        let needed = record.ticks.len();
+        *out_ticks_len = needed;
+        if ticks_cap < needed {
+            return buffer_too_small(needed, ticks_cap);
+        }
+        let Some(out_state_id) = (unsafe { out_state_id.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        let Some(ticks_out) = (unsafe { slice_from_mut_ptr(ticks_out, ticks_cap) }) else {
+            return MCStatus::Null;
+        };
+        *out_state_id = record.state_id;
+        ticks_out[..needed].copy_from_slice(&record.ticks);
+        MCStatus::Ok
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_event_log_compact_summary(
+    log: *const MCEventLog,
+    tier: usize,
+    idx_out: *mut usize,
+    state_out: *mut u64,
+    tick_out: *mut f64,
+    cap: usize,
+    out_len: *mut usize,
+) -> MCStatus {
+    ffi_status(|| {
+        let Some(log) = (unsafe { log.as_ref() }) else {
+            return MCStatus::Null;
+        };
+        let Some(out_len) = (unsafe { out_len.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        if tier >= log.inner.tier_count() {
+            return invalid_argument("event log tier is out of bounds");
+        }
+        let summary = log.inner.compact_summary(tier);
+        let needed = summary.len();
+        *out_len = needed;
+        if cap < needed {
+            return buffer_too_small(needed, cap);
+        }
+        let Some(idx_out) = (unsafe { slice_from_mut_ptr(idx_out, cap) }) else {
+            return MCStatus::Null;
+        };
+        let Some(state_out) = (unsafe { slice_from_mut_ptr(state_out, cap) }) else {
+            return MCStatus::Null;
+        };
+        let Some(tick_out) = (unsafe { slice_from_mut_ptr(tick_out, cap) }) else {
+            return MCStatus::Null;
+        };
+        for (offset, item) in summary.iter().enumerate() {
+            idx_out[offset] = item.index;
+            state_out[offset] = item.state_id;
+            tick_out[offset] = item.tick;
         }
         MCStatus::Ok
     })
@@ -471,6 +1110,37 @@ pub unsafe extern "C" fn mc_event_log_len(log: *const MCEventLog, out_len: *mut 
             return MCStatus::Null;
         };
         *out_len = log.inner.len();
+        MCStatus::Ok
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_event_log_tier_count(
+    log: *const MCEventLog,
+    out: *mut usize,
+) -> MCStatus {
+    ffi_status(|| {
+        let Some(log) = (unsafe { log.as_ref() }) else {
+            return MCStatus::Null;
+        };
+        let Some(out) = (unsafe { out.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        *out = log.inner.tier_count();
+        MCStatus::Ok
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_event_log_is_empty(log: *const MCEventLog, out: *mut bool) -> MCStatus {
+    ffi_status(|| {
+        let Some(log) = (unsafe { log.as_ref() }) else {
+            return MCStatus::Null;
+        };
+        let Some(out) = (unsafe { out.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        *out = log.inner.is_empty();
         MCStatus::Ok
     })
 }
