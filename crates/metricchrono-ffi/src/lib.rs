@@ -1,7 +1,7 @@
 #![allow(clippy::missing_safety_doc)]
 
 use std::cell::{Cell, RefCell};
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
 
@@ -70,10 +70,28 @@ pub struct MCPromotionCounter {
     inner: PromotionCounter,
 }
 
+/// Caller-supplied distance function over two `dim`-length state vectors.
+///
+/// The callback must not unwind, must remain callable for the lifetime of the
+/// meter it is registered with, and `user_data` (passed through verbatim) must
+/// outlive the meter. Returning NaN rejects admission, which is the safe
+/// failure mode for a callback that cannot compute a distance.
+pub type MCDistanceFn =
+    unsafe extern "C" fn(a: *const f64, b: *const f64, dim: usize, user_data: *mut c_void) -> f64;
+
+#[derive(Clone, Copy)]
+enum CoverageMetric {
+    Builtin(c_int),
+    Callback {
+        callback: MCDistanceFn,
+        user_data: *mut c_void,
+    },
+}
+
 pub struct MCCoverageMeter {
     inner: CoverageMeter<Vec<f64>>,
     dim: usize,
-    metric: c_int,
+    metric: CoverageMetric,
     /// Reusable state buffer so rejected observations allocate nothing.
     scratch: Vec<f64>,
 }
@@ -923,10 +941,14 @@ pub unsafe extern "C" fn mc_promotion_counter_free(counter: *mut MCPromotionCoun
     }));
 }
 
-fn coverage_distance(metric: c_int, a: &Vec<f64>, b: &Vec<f64>) -> f64 {
+fn coverage_distance(metric: CoverageMetric, a: &Vec<f64>, b: &Vec<f64>) -> f64 {
     match metric {
-        MC_METRIC_ABSOLUTE => (a[0] - b[0]).abs(),
-        _ => Euclidean.distance(a.as_slice(), b.as_slice()),
+        CoverageMetric::Builtin(MC_METRIC_ABSOLUTE) => (a[0] - b[0]).abs(),
+        CoverageMetric::Builtin(_) => Euclidean.distance(a.as_slice(), b.as_slice()),
+        CoverageMetric::Callback {
+            callback,
+            user_data,
+        } => unsafe { callback(a.as_ptr(), b.as_ptr(), a.len(), user_data) },
     }
 }
 
@@ -963,7 +985,49 @@ pub unsafe extern "C" fn mc_coverage_meter_new(
                 *out = Box::into_raw(Box::new(MCCoverageMeter {
                     inner,
                     dim,
-                    metric,
+                    metric: CoverageMetric::Builtin(metric),
+                    scratch: Vec::with_capacity(dim),
+                }));
+                MCStatus::Ok
+            }
+            Err(error) => status_from_error(error),
+        }
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_coverage_meter_new_with_callback(
+    epsilons: *const f64,
+    len: usize,
+    dim: usize,
+    callback: Option<MCDistanceFn>,
+    user_data: *mut c_void,
+    out: *mut *mut MCCoverageMeter,
+) -> MCStatus {
+    ffi_status(|| {
+        let Some(out) = (unsafe { out.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        *out = ptr::null_mut();
+        let Some(epsilons) = (unsafe { slice_from_ptr(epsilons, len) }) else {
+            return MCStatus::Null;
+        };
+        let Some(callback) = callback else {
+            return MCStatus::Null;
+        };
+        if dim == 0 {
+            set_last_error("coverage state dimension must be > 0");
+            return MCStatus::InvalidArgument;
+        }
+        match CoverageMeter::from_epsilons(epsilons) {
+            Ok(inner) => {
+                *out = Box::into_raw(Box::new(MCCoverageMeter {
+                    inner,
+                    dim,
+                    metric: CoverageMetric::Callback {
+                        callback,
+                        user_data,
+                    },
                     scratch: Vec::with_capacity(dim),
                 }));
                 MCStatus::Ok
@@ -1007,8 +1071,9 @@ pub unsafe extern "C" fn mc_coverage_meter_observe(
         let Some(out) = (unsafe { slice_from_mut_ptr(out, cap) }) else {
             return MCStatus::Null;
         };
-        let metric_id = meter.metric;
-        let metric = MetricFn(move |a: &Vec<f64>, b: &Vec<f64>| coverage_distance(metric_id, a, b));
+        let metric_kind = meter.metric;
+        let metric =
+            MetricFn(move |a: &Vec<f64>, b: &Vec<f64>| coverage_distance(metric_kind, a, b));
         let MCCoverageMeter { inner, scratch, .. } = meter;
         scratch.clear();
         scratch.extend_from_slice(state);
@@ -1571,6 +1636,80 @@ mod tests {
         assert_eq!(
             unsafe { mc_coverage_meter_new(epsilons.as_ptr(), 2, 3, MC_METRIC_ABSOLUTE, &mut bad) },
             MCStatus::InvalidArgument
+        );
+
+        // callback-metric constructor: Chebyshev distinguishes itself from
+        // euclidean on the pair ((0,0), (0.05, 0.09)): euclidean ~0.103 would
+        // admit at eps=0.1, chebyshev 0.09 must reject
+        unsafe extern "C" fn chebyshev(
+            a: *const f64,
+            b: *const f64,
+            dim: usize,
+            _user_data: *mut c_void,
+        ) -> f64 {
+            let a = unsafe { std::slice::from_raw_parts(a, dim) };
+            let b = unsafe { std::slice::from_raw_parts(b, dim) };
+            a.iter()
+                .zip(b)
+                .map(|(left, right)| (left - right).abs())
+                .fold(0.0, f64::max)
+        }
+        let mut cb_meter: *mut MCCoverageMeter = ptr::null_mut();
+        assert_eq!(
+            unsafe {
+                mc_coverage_meter_new_with_callback(
+                    [0.1].as_ptr(),
+                    1,
+                    2,
+                    Some(chebyshev),
+                    ptr::null_mut(),
+                    &mut cb_meter,
+                )
+            },
+            MCStatus::Ok
+        );
+        let mut flag = [false; 1];
+        assert_eq!(
+            unsafe {
+                mc_coverage_meter_observe(
+                    cb_meter,
+                    [0.0, 0.0].as_ptr(),
+                    2,
+                    flag.as_mut_ptr(),
+                    1,
+                    &mut out_len,
+                )
+            },
+            MCStatus::Ok
+        );
+        assert_eq!(
+            unsafe {
+                mc_coverage_meter_observe(
+                    cb_meter,
+                    [0.05, 0.09].as_ptr(),
+                    2,
+                    flag.as_mut_ptr(),
+                    1,
+                    &mut out_len,
+                )
+            },
+            MCStatus::Ok
+        );
+        assert_eq!(flag, [false], "chebyshev 0.09 < 0.1 must reject");
+        unsafe { mc_coverage_meter_free(cb_meter) };
+        // a null callback is rejected
+        assert_eq!(
+            unsafe {
+                mc_coverage_meter_new_with_callback(
+                    [0.1].as_ptr(),
+                    1,
+                    2,
+                    None,
+                    ptr::null_mut(),
+                    &mut cb_meter,
+                )
+            },
+            MCStatus::Null
         );
 
         // pure helpers

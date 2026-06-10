@@ -14,10 +14,22 @@ fn c_header_smoke_compiles() {
         r#"
 #include "metricchrono.h"
 
+static double chebyshev(const double *a, const double *b, size_t dim, void *user_data) {
+  double best = 0.0;
+  size_t i;
+  (void)user_data;
+  for (i = 0; i < dim; i += 1) {
+    double diff = a[i] > b[i] ? a[i] - b[i] : b[i] - a[i];
+    if (diff > best) best = diff;
+  }
+  return best;
+}
+
 int main(void) {
   MCTier tier;
   MCLadder *ladder = 0;
   MCCoverageMeter *meter = 0;
+  MCCoverageMeter *cb_meter = 0;
   double out[2] = {0.0, 0.0};
   double epsilons[2] = {0.1, 0.2};
   double state[2] = {0.0, 0.0};
@@ -39,6 +51,12 @@ int main(void) {
   if (mc_classify_regime(0.0, 1) != MC_REGIME_CREEP) return 9;
   if (mc_progress_efficiency(11, 0.1, 2.0, &efficiency) != MC_STATUS_OK) return 10;
   mc_coverage_meter_free(meter);
+  if (mc_coverage_meter_new_with_callback(epsilons, 2, 2, chebyshev, 0, &cb_meter) !=
+      MC_STATUS_OK)
+    return 11;
+  if (mc_coverage_meter_observe(cb_meter, state, 2, admitted, 2, &len) != MC_STATUS_OK)
+    return 12;
+  mc_coverage_meter_free(cb_meter);
   return 0;
 }
 "#,

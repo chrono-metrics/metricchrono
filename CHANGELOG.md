@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 (2026-06-11)
 
 - Added: `CoverageMeter`, `progress_efficiency`, `classify_regime`, and
   `OperatingRegime` in `metricchrono-core` — a per-tier streaming coverage
@@ -27,6 +27,14 @@
   newest-first scan, NaN-rejects semantics identical to Rust),
   `OperatingRegime`, `classifyRegime`, `progressEfficiency`, with TypeScript
   declarations and tests.
+- Added: custom distance callbacks for the C-ABI coverage meter.
+  `mc_coverage_meter_new_with_callback` takes an `MCDistanceFn`
+  (`double (*)(const double *a, const double *b, size_t dim, void *user_data)`),
+  so embedders can audit coverage under domain metrics without round-tripping
+  states; returning NaN rejects admission (the safe failure mode). The Python
+  `CoverageMeter` accepts any Python callable as its metric (exceptions in the
+  callable are converted to NaN rather than unwinding into the C ABI); the
+  JavaScript binding already accepted arbitrary metric functions.
 
 ## 0.3.0 (2026-06-09)
 

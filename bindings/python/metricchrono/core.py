@@ -176,6 +176,15 @@ class EventSummary:
     tick: float
 
 
+_DISTANCE_CFUNC = ctypes.CFUNCTYPE(
+    ctypes.c_double,
+    ctypes.POINTER(ctypes.c_double),
+    ctypes.POINTER(ctypes.c_double),
+    ctypes.c_size_t,
+    ctypes.c_void_p,
+)
+
+
 class _MCTier(ctypes.Structure):
     _fields_ = [
         ("epsilon", ctypes.c_double),
@@ -466,6 +475,16 @@ def _configure_library(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_void_p),
     ]
     lib.mc_coverage_meter_new.restype = ctypes.c_int
+
+    lib.mc_coverage_meter_new_with_callback.argtypes = [
+        ctypes.POINTER(ctypes.c_double),
+        ctypes.c_size_t,
+        ctypes.c_size_t,
+        _DISTANCE_CFUNC,
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_void_p),
+    ]
+    lib.mc_coverage_meter_new_with_callback.restype = ctypes.c_int
 
     lib.mc_coverage_meter_observe.argtypes = [
         ctypes.c_void_p,
@@ -1279,18 +1298,43 @@ class CoverageMeter:
         self,
         epsilons: Sequence[float],
         dim: int,
-        metric: Metric = Metric.EUCLIDEAN,
+        metric: Union[Metric, Callable[[list[float], list[float]], float]] = Metric.EUCLIDEAN,
     ) -> None:
         values = _double_list(epsilons)
         epsilon_array = _double_array(values)
         out = ctypes.c_void_p()
-        status = _load_library().mc_coverage_meter_new(
-            epsilon_array,
-            len(values),
-            dim,
-            int(metric),
-            ctypes.byref(out),
-        )
+        self._callback = None
+        if callable(metric) and not isinstance(metric, Metric):
+            distance = metric
+
+            def _trampoline(a_ptr: Any, b_ptr: Any, dim_: int, _user_data: Any) -> float:
+                # exceptions must not unwind into the C ABI: NaN rejects
+                # admission, the documented safe failure mode
+                try:
+                    a = [a_ptr[index] for index in range(dim_)]
+                    b = [b_ptr[index] for index in range(dim_)]
+                    return float(distance(a, b))
+                except Exception:
+                    return float("nan")
+
+            # keep the CFUNCTYPE object alive for the meter's lifetime
+            self._callback = _DISTANCE_CFUNC(_trampoline)
+            status = _load_library().mc_coverage_meter_new_with_callback(
+                epsilon_array,
+                len(values),
+                dim,
+                self._callback,
+                None,
+                ctypes.byref(out),
+            )
+        else:
+            status = _load_library().mc_coverage_meter_new(
+                epsilon_array,
+                len(values),
+                dim,
+                int(metric),
+                ctypes.byref(out),
+            )
         _check(status)
         if not out.value:
             raise NativeStatusError(MC_STATUS_INVALID_ARGUMENT)

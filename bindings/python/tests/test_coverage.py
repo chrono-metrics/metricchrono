@@ -60,3 +60,28 @@ def test_invalid_construction_and_shape_errors():
     meter.close()
     with pytest.raises(RuntimeError):
         meter.observe([0.0, 0.0])
+
+
+def test_custom_callable_metric():
+    # Chebyshev distinguishes itself from euclidean on ((0,0),(0.05,0.09)):
+    # euclidean ~0.103 would admit at eps=0.1, chebyshev 0.09 must reject
+    def chebyshev(a, b):
+        return max(abs(x - y) for x, y in zip(a, b))
+
+    with CoverageMeter([0.1], dim=2, metric=chebyshev) as meter:
+        assert meter.observe([0.0, 0.0]) == [True]
+        assert meter.observe([0.05, 0.09]) == [False]
+        assert meter.counts == [1]
+    with CoverageMeter([0.1], dim=2) as euclid:
+        euclid.observe([0.0, 0.0])
+        assert euclid.observe([0.05, 0.09]) == [True]
+
+
+def test_raising_callable_metric_rejects_safely():
+    def broken(_a, _b):
+        raise ValueError("no distance")
+
+    with CoverageMeter([0.1], dim=1, metric=broken) as meter:
+        assert meter.observe([0.0]) == [True]  # first sample: empty store
+        assert meter.observe([5.0]) == [False]  # NaN from the trampoline rejects
+        assert meter.counts == [1]

@@ -166,11 +166,25 @@ MCStatus mc_promotion_counter_quotas(const MCPromotionCounter *counter,
 MCStatus mc_promotion_counter_reset(MCPromotionCounter *counter);
 void mc_promotion_counter_free(MCPromotionCounter *counter);
 
+/* Caller-supplied distance over two dim-length state vectors. Must not
+ * unwind; user_data is passed through verbatim and must outlive the meter.
+ * Returning NaN rejects admission. */
+typedef double (*MCDistanceFn)(const double *a,
+                               const double *b,
+                               size_t dim,
+                               void *user_data);
+
 MCStatus mc_coverage_meter_new(const double *epsilons,
                                size_t len,
                                size_t dim,
                                int metric,
                                MCCoverageMeter **out);
+MCStatus mc_coverage_meter_new_with_callback(const double *epsilons,
+                                             size_t len,
+                                             size_t dim,
+                                             MCDistanceFn callback,
+                                             void *user_data,
+                                             MCCoverageMeter **out);
 MCStatus mc_coverage_meter_observe(MCCoverageMeter *meter,
                                    const double *state,
                                    size_t state_len,
