@@ -22,22 +22,35 @@ use serde::{Deserialize, Serialize};
 ///
 /// Distances that are NaN reject admission (conservative: a sample with an
 /// undefined distance never becomes a representative).
+///
+/// Storage is pooled: a sample admitted at several tiers is cloned **once**
+/// into a shared pool, and each tier holds indices into it -- an `m`-fold
+/// memory reduction over per-tier stores for deep ladders.  Pooling also lets
+/// one `observe` reuse each representative's distance across tiers (a
+/// representative shared by several tiers is measured once per sample).
 #[derive(Clone, Debug)]
 pub struct CoverageMeter<T> {
     epsilons: Vec<f64>,
-    representatives: Vec<Vec<T>>,
+    pool: Vec<T>,
+    tier_members: Vec<Vec<usize>>,
+    /// Per-pool-entry `(generation, distance)` memo for the current observe.
+    scratch: Vec<(u64, f64)>,
+    generation: u64,
 }
 
-impl<T: Clone> CoverageMeter<T> {
+impl<T> CoverageMeter<T> {
     /// Build a meter with one store per tier, using each tier's epsilon as its
     /// packing resolution.  Accepts a [`crate::Ladder`], a `Vec<Tier>`, or a
     /// tier slice.
     pub fn from_ladder(ladder: impl AsRef<[Tier]>) -> Self {
         let epsilons: Vec<f64> = ladder.as_ref().iter().map(|tier| tier.epsilon).collect();
-        let representatives = vec![Vec::new(); epsilons.len()];
+        let tier_members = vec![Vec::new(); epsilons.len()];
         Self {
             epsilons,
-            representatives,
+            pool: Vec::new(),
+            tier_members,
+            scratch: Vec::new(),
+            generation: 0,
         }
     }
 
@@ -55,27 +68,14 @@ impl<T: Clone> CoverageMeter<T> {
                 "coverage epsilons must be finite and positive",
             ));
         }
-        let representatives = vec![Vec::new(); epsilons.len()];
+        let tier_members = vec![Vec::new(); epsilons.len()];
         Ok(Self {
             epsilons,
-            representatives,
+            pool: Vec::new(),
+            tier_members,
+            scratch: Vec::new(),
+            generation: 0,
         })
-    }
-
-    /// Observe one sample.  Returns, per tier, whether the sample was admitted
-    /// as a new representative (i.e. whether coverage grew at that tier).
-    pub fn observe<M: Metric<T>>(&mut self, metric: &M, state: &T) -> Vec<bool> {
-        let mut admitted = Vec::with_capacity(self.epsilons.len());
-        for (tier, epsilon) in self.epsilons.iter().enumerate() {
-            let separated = self.representatives[tier]
-                .iter()
-                .all(|representative| metric.distance(representative, state) >= *epsilon);
-            if separated {
-                self.representatives[tier].push(state.clone());
-            }
-            admitted.push(separated);
-        }
-        admitted
     }
 
     /// Number of tiers.
@@ -90,17 +90,85 @@ impl<T: Clone> CoverageMeter<T> {
 
     /// Coverage count at one tier.
     pub fn count(&self, tier: usize) -> Option<usize> {
-        self.representatives.get(tier).map(Vec::len)
+        self.tier_members.get(tier).map(Vec::len)
     }
 
     /// Coverage counts at every tier.
     pub fn counts(&self) -> Vec<usize> {
-        self.representatives.iter().map(Vec::len).collect()
+        self.tier_members.iter().map(Vec::len).collect()
+    }
+
+    /// Number of unique representatives stored across all tiers (the pooled
+    /// memory footprint; per-tier counts share these entries).
+    pub fn unique_representatives(&self) -> usize {
+        self.pool.len()
     }
 
     /// Stored representatives at one tier.
-    pub fn representatives(&self, tier: usize) -> Option<&[T]> {
-        self.representatives.get(tier).map(Vec::as_slice)
+    pub fn representatives(&self, tier: usize) -> Option<impl Iterator<Item = &T> + '_> {
+        self.tier_members
+            .get(tier)
+            .map(|members| members.iter().map(|&index| &self.pool[index]))
+    }
+}
+
+impl<T: Clone> CoverageMeter<T> {
+    /// Observe one sample without allocating: writes, per tier, whether the
+    /// sample was admitted as a new representative (i.e. whether coverage grew
+    /// at that tier).  `admitted` must have exactly one slot per tier.
+    pub fn observe_into<M: Metric<T>>(
+        &mut self,
+        metric: &M,
+        state: &T,
+        admitted: &mut [bool],
+    ) -> Result<()> {
+        if admitted.len() != self.epsilons.len() {
+            return Err(MetricChronoError::ShapeMismatch {
+                expected: self.epsilons.len(),
+                actual: admitted.len(),
+                context: "coverage admitted flags",
+            });
+        }
+        self.generation += 1;
+        let generation = self.generation;
+        let pool = &self.pool;
+        let scratch = &mut self.scratch;
+        let mut any_admitted = false;
+        for (tier, epsilon) in self.epsilons.iter().enumerate() {
+            // newest-first scan: streams with locality (walks, drifting
+            // telemetry) are rejected by a recently admitted representative,
+            // so reverse order lets the all() short-circuit far sooner
+            let separated = self.tier_members[tier].iter().rev().all(|&index| {
+                let entry = &mut scratch[index];
+                if entry.0 != generation {
+                    *entry = (generation, metric.distance(&pool[index], state));
+                }
+                entry.1 >= *epsilon
+            });
+            admitted[tier] = separated;
+            any_admitted |= separated;
+        }
+        if any_admitted {
+            let index = self.pool.len();
+            self.pool.push(state.clone());
+            self.scratch.push((0, 0.0));
+            for (tier, flag) in admitted.iter().enumerate() {
+                if *flag {
+                    self.tier_members[tier].push(index);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Observe one sample.  Returns, per tier, whether the sample was admitted
+    /// as a new representative.  Allocating convenience wrapper over
+    /// [`Self::observe_into`].
+    pub fn observe<M: Metric<T>>(&mut self, metric: &M, state: &T) -> Vec<bool> {
+        let mut admitted = vec![false; self.epsilons.len()];
+        self.observe_into(metric, state, &mut admitted)
+            .expect("admitted flags sized to tier count");
+        admitted
     }
 }
 
@@ -270,5 +338,77 @@ mod tests {
         meter.observe(&metric, &0.0);
         meter.observe(&metric, &10.0);
         assert_eq!(meter.count(0), Some(1));
+    }
+
+    #[test]
+    fn pooled_storage_deduplicates_across_tiers() {
+        let mut meter = meter_eps(&[0.1, 0.2]);
+        let metric = Absolute;
+        meter.observe(&metric, &0.0); // admitted at both tiers
+        meter.observe(&metric, &1.0); // admitted at both tiers
+        meter.observe(&metric, &1.15); // tier 0 only (0.15 < 0.2)
+        assert_eq!(meter.counts(), vec![3, 2]);
+        // five tier memberships, but only three stored states
+        assert_eq!(meter.unique_representatives(), 3);
+        let tier0: Vec<f64> = meter.representatives(0).expect("tier 0").copied().collect();
+        assert_eq!(tier0, vec![0.0, 1.0, 1.15]);
+        let tier1: Vec<f64> = meter.representatives(1).expect("tier 1").copied().collect();
+        assert_eq!(tier1, vec![0.0, 1.0]);
+    }
+
+    #[test]
+    fn observe_into_rejects_wrong_shape() {
+        let mut meter = meter_eps(&[0.1, 0.2]);
+        let mut flags = [false; 1];
+        assert!(meter.observe_into(&Absolute, &0.0, &mut flags).is_err());
+    }
+
+    #[test]
+    fn memoized_observe_matches_naive_reference() {
+        // naive reference: independent per-tier representative stores
+        struct Naive {
+            epsilons: Vec<f64>,
+            reps: Vec<Vec<f64>>,
+        }
+        impl Naive {
+            fn observe(&mut self, x: f64) -> Vec<bool> {
+                self.epsilons
+                    .iter()
+                    .enumerate()
+                    .map(|(tier, eps)| {
+                        let sep = self.reps[tier].iter().all(|r| (r - x).abs() >= *eps);
+                        if sep {
+                            self.reps[tier].push(x);
+                        }
+                        sep
+                    })
+                    .collect()
+            }
+        }
+
+        let epsilons = [0.05, 0.1, 0.2, 0.4];
+        let mut meter = meter_eps(&epsilons);
+        let mut naive = Naive {
+            epsilons: epsilons.to_vec(),
+            reps: vec![Vec::new(); epsilons.len()],
+        };
+        let metric = Absolute;
+        // deterministic LCG walk
+        let mut seed = 0x9E3779B97F4A7C15_u64;
+        let mut uniform = move || {
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            (seed >> 11) as f64 / (1_u64 << 53) as f64
+        };
+        let mut x = 0.0_f64;
+        for _ in 0..300 {
+            x += (uniform() - 0.5) * 0.3;
+            assert_eq!(meter.observe(&metric, &x), naive.observe(x));
+        }
+        assert_eq!(
+            meter.counts(),
+            naive.reps.iter().map(Vec::len).collect::<Vec<_>>()
+        );
     }
 }

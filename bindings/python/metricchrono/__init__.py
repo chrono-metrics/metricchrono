@@ -2,6 +2,7 @@
 
 from .core import (
     Absolute,
+    CoverageMeter,
     EventRecord,
     EventLog,
     EventSummary,
@@ -13,6 +14,7 @@ from .core import (
     NativeLoadError,
     NativeStatusError,
     Normalization,
+    OperatingRegime,
     PromotionCounter,
     Tier,
     TierBuilder,
@@ -20,6 +22,7 @@ from .core import (
     absolute_distance,
     adaptive_ladder_distance,
     carry_rules,
+    classify_regime,
     coherence_residual,
     coherence_residuals,
     consensus_result_from_schema,
@@ -32,6 +35,7 @@ from .core import (
     ladder_to_schema,
     ladder_values,
     normalize_ticks,
+    progress_efficiency,
     simple_weight_update,
     smooth_ladder_distance,
     smooth_tick_distance,
@@ -48,6 +52,7 @@ from .core import (
 
 __all__ = [
     "Absolute",
+    "CoverageMeter",
     "EventRecord",
     "EventLog",
     "EventSummary",
@@ -59,6 +64,7 @@ __all__ = [
     "NativeLoadError",
     "NativeStatusError",
     "Normalization",
+    "OperatingRegime",
     "PromotionCounter",
     "Tier",
     "TierBuilder",
@@ -66,6 +72,7 @@ __all__ = [
     "absolute_distance",
     "adaptive_ladder_distance",
     "carry_rules",
+    "classify_regime",
     "coherence_residual",
     "coherence_residuals",
     "consensus_result_from_schema",
@@ -78,6 +85,7 @@ __all__ = [
     "ladder_to_schema",
     "ladder_values",
     "normalize_ticks",
+    "progress_efficiency",
     "simple_weight_update",
     "smooth_ladder_distance",
     "smooth_tick_distance",

@@ -6,14 +6,20 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
 
 use metricchrono_core::{
-    adaptive_ladder_distance, carry_rules, custom_ladder, geometric_ladder, ladder_distance,
-    ladder_pair, normalize_ticks, simple_weight_update, smooth_tick_distance, tick_distance,
-    tick_pair, validate_ladder, weighted_consensus, Absolute, Euclidean, EventLog, Metric,
-    MetricChronoError, Normalization, PromotionCounter, SmoothParams, Tier,
+    adaptive_ladder_distance, carry_rules, classify_regime, custom_ladder, geometric_ladder,
+    ladder_distance, ladder_pair, normalize_ticks, progress_efficiency, simple_weight_update,
+    smooth_tick_distance, tick_distance, tick_pair, validate_ladder, weighted_consensus, Absolute,
+    CoverageMeter, Euclidean, EventLog, Metric, MetricChronoError, MetricFn, Normalization,
+    OperatingRegime, PromotionCounter, SmoothParams, Tier,
 };
 
 const MC_METRIC_EUCLIDEAN: c_int = 0;
 const MC_METRIC_ABSOLUTE: c_int = 1;
+
+const MC_REGIME_QUIESCENT: c_int = 0;
+const MC_REGIME_PROGRESS: c_int = 1;
+const MC_REGIME_CHURN: c_int = 2;
+const MC_REGIME_CREEP: c_int = 3;
 
 const MC_NORMALIZATION_NONE: c_int = 0;
 const MC_NORMALIZATION_UNIT_MAX: c_int = 1;
@@ -62,6 +68,14 @@ pub struct MCLadder {
 
 pub struct MCPromotionCounter {
     inner: PromotionCounter,
+}
+
+pub struct MCCoverageMeter {
+    inner: CoverageMeter<Vec<f64>>,
+    dim: usize,
+    metric: c_int,
+    /// Reusable state buffer so rejected observations allocate nothing.
+    scratch: Vec<f64>,
 }
 
 impl From<MCTier> for Tier {
@@ -909,6 +923,208 @@ pub unsafe extern "C" fn mc_promotion_counter_free(counter: *mut MCPromotionCoun
     }));
 }
 
+fn coverage_distance(metric: c_int, a: &Vec<f64>, b: &Vec<f64>) -> f64 {
+    match metric {
+        MC_METRIC_ABSOLUTE => (a[0] - b[0]).abs(),
+        _ => Euclidean.distance(a.as_slice(), b.as_slice()),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_coverage_meter_new(
+    epsilons: *const f64,
+    len: usize,
+    dim: usize,
+    metric: c_int,
+    out: *mut *mut MCCoverageMeter,
+) -> MCStatus {
+    ffi_status(|| {
+        let Some(out) = (unsafe { out.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        *out = ptr::null_mut();
+        let Some(epsilons) = (unsafe { slice_from_ptr(epsilons, len) }) else {
+            return MCStatus::Null;
+        };
+        if dim == 0 {
+            set_last_error("coverage state dimension must be > 0");
+            return MCStatus::InvalidArgument;
+        }
+        if metric != MC_METRIC_EUCLIDEAN && metric != MC_METRIC_ABSOLUTE {
+            set_last_error("unknown metric id");
+            return MCStatus::InvalidArgument;
+        }
+        if metric == MC_METRIC_ABSOLUTE && dim != 1 {
+            set_last_error("absolute metric requires dimension 1");
+            return MCStatus::InvalidArgument;
+        }
+        match CoverageMeter::from_epsilons(epsilons) {
+            Ok(inner) => {
+                *out = Box::into_raw(Box::new(MCCoverageMeter {
+                    inner,
+                    dim,
+                    metric,
+                    scratch: Vec::with_capacity(dim),
+                }));
+                MCStatus::Ok
+            }
+            Err(error) => status_from_error(error),
+        }
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_coverage_meter_observe(
+    meter: *mut MCCoverageMeter,
+    state: *const f64,
+    state_len: usize,
+    out: *mut bool,
+    cap: usize,
+    out_len: *mut usize,
+) -> MCStatus {
+    ffi_status(|| {
+        let Some(meter) = (unsafe { meter.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        let Some(out_len) = (unsafe { out_len.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        let needed = meter.inner.tier_count();
+        *out_len = needed;
+        if cap < needed {
+            return buffer_too_small(needed, cap);
+        }
+        let Some(state) = (unsafe { slice_from_ptr(state, state_len) }) else {
+            return MCStatus::Null;
+        };
+        if state_len != meter.dim {
+            return status_from_error(MetricChronoError::ShapeMismatch {
+                expected: meter.dim,
+                actual: state_len,
+                context: "coverage state dimension",
+            });
+        }
+        let Some(out) = (unsafe { slice_from_mut_ptr(out, cap) }) else {
+            return MCStatus::Null;
+        };
+        let metric_id = meter.metric;
+        let metric = MetricFn(move |a: &Vec<f64>, b: &Vec<f64>| coverage_distance(metric_id, a, b));
+        let MCCoverageMeter { inner, scratch, .. } = meter;
+        scratch.clear();
+        scratch.extend_from_slice(state);
+        inner
+            .observe_into(&metric, scratch, &mut out[..needed])
+            .map_or_else(status_from_error, |_| MCStatus::Ok)
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_coverage_meter_counts(
+    meter: *const MCCoverageMeter,
+    out: *mut u64,
+    cap: usize,
+    out_len: *mut usize,
+) -> MCStatus {
+    ffi_status(|| {
+        let Some(meter) = (unsafe { meter.as_ref() }) else {
+            return MCStatus::Null;
+        };
+        let Some(out_len) = (unsafe { out_len.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        let needed = meter.inner.tier_count();
+        *out_len = needed;
+        if cap < needed {
+            return buffer_too_small(needed, cap);
+        }
+        let Some(out) = (unsafe { slice_from_mut_ptr(out, cap) }) else {
+            return MCStatus::Null;
+        };
+        for (slot, count) in out.iter_mut().zip(meter.inner.counts()) {
+            *slot = count as u64;
+        }
+        MCStatus::Ok
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_coverage_meter_unique_representatives(
+    meter: *const MCCoverageMeter,
+    out: *mut u64,
+) -> MCStatus {
+    ffi_status(|| {
+        let Some(meter) = (unsafe { meter.as_ref() }) else {
+            return MCStatus::Null;
+        };
+        let Some(out) = (unsafe { out.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        *out = meter.inner.unique_representatives() as u64;
+        MCStatus::Ok
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_coverage_meter_tier_count(
+    meter: *const MCCoverageMeter,
+    out: *mut usize,
+) -> MCStatus {
+    ffi_status(|| {
+        let Some(meter) = (unsafe { meter.as_ref() }) else {
+            return MCStatus::Null;
+        };
+        let Some(out) = (unsafe { out.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        *out = meter.inner.tier_count();
+        MCStatus::Ok
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_coverage_meter_free(meter: *mut MCCoverageMeter) {
+    if meter.is_null() {
+        return;
+    }
+    let _ = catch_unwind(AssertUnwindSafe(|| unsafe {
+        drop(Box::from_raw(meter));
+    }));
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mc_progress_efficiency(
+    coverage: u64,
+    epsilon: f64,
+    path_length: f64,
+    out: *mut f64,
+) -> MCStatus {
+    ffi_status(|| {
+        let Some(out) = (unsafe { out.as_mut() }) else {
+            return MCStatus::Null;
+        };
+        match progress_efficiency(coverage as usize, epsilon, path_length) {
+            Some(value) => {
+                *out = value;
+                MCStatus::Ok
+            }
+            None => {
+                set_last_error("path_length must be finite and positive");
+                MCStatus::InvalidArgument
+            }
+        }
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn mc_classify_regime(throughput_delta: f64, coverage_delta: u64) -> c_int {
+    match classify_regime(throughput_delta, coverage_delta as usize) {
+        OperatingRegime::Quiescent => MC_REGIME_QUIESCENT,
+        OperatingRegime::Progress => MC_REGIME_PROGRESS,
+        OperatingRegime::Churn => MC_REGIME_CHURN,
+        OperatingRegime::Creep => MC_REGIME_CREEP,
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn mc_event_log_new(tier_count: usize) -> *mut MCEventLog {
     begin_ffi_call();
@@ -1266,5 +1482,111 @@ mod tests {
         assert!(has);
         assert_eq!(next, 1);
         unsafe { mc_event_log_free(log) };
+    }
+
+    #[test]
+    fn ffi_coverage_meter_round_trip() {
+        let epsilons = [0.1, 0.2];
+        let mut meter: *mut MCCoverageMeter = ptr::null_mut();
+        assert_eq!(
+            unsafe {
+                mc_coverage_meter_new(epsilons.as_ptr(), 2, 2, MC_METRIC_EUCLIDEAN, &mut meter)
+            },
+            MCStatus::Ok
+        );
+        assert!(!meter.is_null());
+
+        let mut admitted = [false; 2];
+        let mut out_len = 0usize;
+        // first sample is always admitted at every tier
+        assert_eq!(
+            unsafe {
+                mc_coverage_meter_observe(
+                    meter,
+                    [0.0, 0.0].as_ptr(),
+                    2,
+                    admitted.as_mut_ptr(),
+                    2,
+                    &mut out_len,
+                )
+            },
+            MCStatus::Ok
+        );
+        assert_eq!(out_len, 2);
+        assert_eq!(admitted, [true, true]);
+        // 0.15 away: admitted at tier 0 (>= 0.1) but not tier 1 (< 0.2)
+        assert_eq!(
+            unsafe {
+                mc_coverage_meter_observe(
+                    meter,
+                    [0.15, 0.0].as_ptr(),
+                    2,
+                    admitted.as_mut_ptr(),
+                    2,
+                    &mut out_len,
+                )
+            },
+            MCStatus::Ok
+        );
+        assert_eq!(admitted, [true, false]);
+
+        let mut counts = [0u64; 2];
+        assert_eq!(
+            unsafe { mc_coverage_meter_counts(meter, counts.as_mut_ptr(), 2, &mut out_len) },
+            MCStatus::Ok
+        );
+        assert_eq!(counts, [2, 1]);
+
+        let mut unique = 0u64;
+        assert_eq!(
+            unsafe { mc_coverage_meter_unique_representatives(meter, &mut unique) },
+            MCStatus::Ok
+        );
+        assert_eq!(unique, 2);
+
+        // wrong state dimension is a shape error
+        assert_eq!(
+            unsafe {
+                mc_coverage_meter_observe(
+                    meter,
+                    [0.0].as_ptr(),
+                    1,
+                    admitted.as_mut_ptr(),
+                    2,
+                    &mut out_len,
+                )
+            },
+            MCStatus::InvalidArgument
+        );
+        unsafe { mc_coverage_meter_free(meter) };
+
+        // invalid constructions
+        let mut bad: *mut MCCoverageMeter = ptr::null_mut();
+        assert_eq!(
+            unsafe {
+                mc_coverage_meter_new(epsilons.as_ptr(), 2, 0, MC_METRIC_EUCLIDEAN, &mut bad)
+            },
+            MCStatus::InvalidArgument
+        );
+        assert_eq!(
+            unsafe { mc_coverage_meter_new(epsilons.as_ptr(), 2, 3, MC_METRIC_ABSOLUTE, &mut bad) },
+            MCStatus::InvalidArgument
+        );
+
+        // pure helpers
+        assert_eq!(mc_classify_regime(0.0, 0), MC_REGIME_QUIESCENT);
+        assert_eq!(mc_classify_regime(1.0, 1), MC_REGIME_PROGRESS);
+        assert_eq!(mc_classify_regime(1.0, 0), MC_REGIME_CHURN);
+        assert_eq!(mc_classify_regime(0.0, 1), MC_REGIME_CREEP);
+        let mut efficiency = -1.0;
+        assert_eq!(
+            unsafe { mc_progress_efficiency(11, 0.1, 2.0, &mut efficiency) },
+            MCStatus::Ok
+        );
+        assert!((efficiency - 0.5).abs() < 1e-12);
+        assert_eq!(
+            unsafe { mc_progress_efficiency(11, 0.1, 0.0, &mut efficiency) },
+            MCStatus::InvalidArgument
+        );
     }
 }

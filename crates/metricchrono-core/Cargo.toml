@@ -29,6 +29,10 @@ name = "ladder_throughput"
 harness = false
 
 [[bench]]
+name = "coverage_throughput"
+harness = false
+
+[[bench]]
 name = "publish_suite"
 harness = false
 

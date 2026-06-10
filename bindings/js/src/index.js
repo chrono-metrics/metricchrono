@@ -477,6 +477,116 @@ export function simpleWeightUpdate(weights, residuals, learningRate, floor) {
   return updated.map((value) => value / total);
 }
 
+export const OperatingRegime = Object.freeze({
+  Quiescent: "quiescent",
+  Progress: "progress",
+  Churn: "churn",
+  Creep: "creep",
+});
+
+export class CoverageMeter {
+  /**
+   * Per-tier streaming coverage meter: a greedy maximal epsilon-packing of
+   * the visited image.  Complements tick throughput: coverage counts
+   * distinct epsilon-separated territory, is invariant under revisits, and
+   * registers sub-threshold relocation (creep) that per-step thresholding
+   * is silent on by design.  Storage is pooled: a sample admitted at
+   * several tiers is stored once.  NaN distances reject admission.
+   */
+  constructor(epsilons, metric = euclideanDistance) {
+    if (epsilons.length === 0) {
+      throw new MetricChronoError("ladder must contain at least one tier");
+    }
+    if (epsilons.some((epsilon) => !Number.isFinite(epsilon) || epsilon <= 0)) {
+      throw new MetricChronoError("coverage epsilons must be finite and positive");
+    }
+    if (typeof metric !== "function") {
+      throw new MetricChronoError("metric must be a distance function");
+    }
+    this.epsilons = epsilons.slice();
+    this.metric = metric;
+    this.pool = [];
+    this.tierMembers = epsilons.map(() => []);
+  }
+
+  get tierCount() {
+    return this.epsilons.length;
+  }
+
+  observe(state) {
+    const distances = new Map();
+    const distanceTo = (index) => {
+      let value = distances.get(index);
+      if (value === undefined) {
+        value = this.metric(this.pool[index], state);
+        distances.set(index, value);
+      }
+      return value;
+    };
+    const admitted = this.epsilons.map((epsilon, tier) => {
+      const members = this.tierMembers[tier];
+      // newest-first scan: locality-heavy streams short-circuit early
+      for (let position = members.length - 1; position >= 0; position -= 1) {
+        if (!(distanceTo(members[position]) >= epsilon)) {
+          return false;
+        }
+      }
+      return true;
+    });
+    if (admitted.some(Boolean)) {
+      const index = this.pool.length;
+      this.pool.push(Array.isArray(state) ? state.slice() : state);
+      admitted.forEach((flag, tier) => {
+        if (flag) {
+          this.tierMembers[tier].push(index);
+        }
+      });
+    }
+    return admitted;
+  }
+
+  count(tier) {
+    const members = this.tierMembers[tier];
+    return members === undefined ? undefined : members.length;
+  }
+
+  counts() {
+    return this.tierMembers.map((members) => members.length);
+  }
+
+  uniqueRepresentatives() {
+    return this.pool.length;
+  }
+
+  representatives(tier) {
+    const members = this.tierMembers[tier];
+    return members === undefined ? undefined : members.map((index) => this.pool[index]);
+  }
+}
+
+export function progressEfficiency(coverage, epsilon, pathLength) {
+  if (!Number.isFinite(pathLength) || pathLength <= 0) {
+    throw new MetricChronoError("path_length must be finite and positive");
+  }
+  const gained = Math.max(coverage - 1, 0) * epsilon;
+  return Math.min(Math.max(gained / pathLength, 0), 1);
+}
+
+export function classifyRegime(throughputDelta, coverageDelta) {
+  const ticked = throughputDelta > 0;
+  const covered = coverageDelta > 0;
+  if (ticked && covered) {
+    return OperatingRegime.Progress;
+  }
+  if (ticked) {
+    return OperatingRegime.Churn;
+  }
+  if (covered) {
+    return OperatingRegime.Creep;
+  }
+  return OperatingRegime.Quiescent;
+}
+
 export function euclideanDistance(a, b) {
   ensureSameLength(a, b);
   return Math.sqrt(a.map((value, index) => (value - b[index]) ** 2).reduce(sum, 0));

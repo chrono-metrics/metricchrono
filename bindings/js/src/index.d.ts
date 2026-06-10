@@ -96,6 +96,33 @@ export class PromotionCounter {
   step(eventFlags?: readonly boolean[]): boolean[];
 }
 
+
+export const OperatingRegime: {
+  readonly Quiescent: "quiescent";
+  readonly Progress: "progress";
+  readonly Churn: "churn";
+  readonly Creep: "creep";
+};
+export type Regime = (typeof OperatingRegime)[keyof typeof OperatingRegime];
+
+export class CoverageMeter<T = readonly number[]> {
+  readonly epsilons: number[];
+  constructor(epsilons: readonly number[], metric?: (a: T, b: T) => number);
+  get tierCount(): number;
+  observe(state: T): boolean[];
+  count(tier: number): number | undefined;
+  counts(): number[];
+  uniqueRepresentatives(): number;
+  representatives(tier: number): T[] | undefined;
+}
+
+export function progressEfficiency(
+  coverage: number,
+  epsilon: number,
+  pathLength: number,
+): number;
+export function classifyRegime(throughputDelta: number, coverageDelta: number): Regime;
+
 export function adaptiveLadderDistance(
   distance: number,
   ladder: readonly Tier[],

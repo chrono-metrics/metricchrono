@@ -9,8 +9,24 @@
   Coverage is invariant under revisits and detects sub-threshold relocation
   (creep) that per-step thresholding is silent on by design; jointly with
   throughput it classifies windows into quiescent / progress / churn / creep.
-  Rust-only for now: not yet exposed through the C ABI or the Python/JS
-  bindings.
+- Performance: `CoverageMeter` stores pooled representatives (a sample
+  admitted at several tiers is cloned once and indexed per tier), memoizes
+  each representative's distance across tiers within one observation, scans
+  newest-first so locality-heavy streams short-circuit early (2.3x on the
+  2-D walk benchmark, `benches/coverage_throughput.rs`), and exposes the
+  allocation-free `observe_into`. `representatives()` now returns an
+  iterator over pooled entries and accessors no longer require `T: Clone`.
+- Added: full binding parity for coverage. C ABI: opaque `MCCoverageMeter`
+  (`mc_coverage_meter_new/observe/counts/unique_representatives/tier_count/
+  free`) over fixed-dimension `double` states with the existing metric ids,
+  plus `mc_progress_efficiency`, `mc_classify_regime`, and the `MCRegime`
+  enum, declared in both copies of `metricchrono.h` and exercised by the C
+  header smoke test. Python: `CoverageMeter`, `OperatingRegime`,
+  `classify_regime`, `progress_efficiency` over the C ABI. JavaScript:
+  pure-JS `CoverageMeter` (pooled storage, per-observe distance memo,
+  newest-first scan, NaN-rejects semantics identical to Rust),
+  `OperatingRegime`, `classifyRegime`, `progressEfficiency`, with TypeScript
+  declarations and tests.
 
 ## 0.3.0 (2026-06-09)
 

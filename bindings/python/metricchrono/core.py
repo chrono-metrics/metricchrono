@@ -57,6 +57,13 @@ Euclidean = Metric.EUCLIDEAN
 Absolute = Metric.ABSOLUTE
 
 
+class OperatingRegime(IntEnum):
+    QUIESCENT = 0
+    PROGRESS = 1
+    CHURN = 2
+    CREEP = 3
+
+
 class Normalization(IntEnum):
     NONE = MC_NORMALIZATION_NONE
     UNIT_MAX = MC_NORMALIZATION_UNIT_MAX
@@ -450,6 +457,59 @@ def _configure_library(lib: ctypes.CDLL) -> None:
 
     lib.mc_promotion_counter_free.argtypes = [ctypes.c_void_p]
     lib.mc_promotion_counter_free.restype = None
+
+    lib.mc_coverage_meter_new.argtypes = [
+        ctypes.POINTER(ctypes.c_double),
+        ctypes.c_size_t,
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_void_p),
+    ]
+    lib.mc_coverage_meter_new.restype = ctypes.c_int
+
+    lib.mc_coverage_meter_observe.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_double),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_bool),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.mc_coverage_meter_observe.restype = ctypes.c_int
+
+    lib.mc_coverage_meter_counts.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_uint64),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.mc_coverage_meter_counts.restype = ctypes.c_int
+
+    lib.mc_coverage_meter_unique_representatives.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_uint64),
+    ]
+    lib.mc_coverage_meter_unique_representatives.restype = ctypes.c_int
+
+    lib.mc_coverage_meter_tier_count.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.mc_coverage_meter_tier_count.restype = ctypes.c_int
+
+    lib.mc_coverage_meter_free.argtypes = [ctypes.c_void_p]
+    lib.mc_coverage_meter_free.restype = None
+
+    lib.mc_progress_efficiency.argtypes = [
+        ctypes.c_uint64,
+        ctypes.c_double,
+        ctypes.c_double,
+        ctypes.POINTER(ctypes.c_double),
+    ]
+    lib.mc_progress_efficiency.restype = ctypes.c_int
+
+    lib.mc_classify_regime.argtypes = [ctypes.c_double, ctypes.c_uint64]
+    lib.mc_classify_regime.restype = ctypes.c_int
 
     lib.mc_event_log_new.argtypes = [ctypes.c_size_t]
     lib.mc_event_log_new.restype = ctypes.c_void_p
@@ -1203,6 +1263,131 @@ class PromotionCounter:
     def _ensure_open(self) -> None:
         if getattr(self, "_ptr", None) is None:
             raise RuntimeError("PromotionCounter is closed")
+
+
+class CoverageMeter:
+    """Per-tier streaming coverage meter (greedy maximal epsilon-packing).
+
+    The complementary read-out to tick throughput: coverage counts distinct
+    epsilon-separated territory, is invariant under revisits, and registers
+    sub-threshold relocation (creep) that per-step thresholding is silent on
+    by design.  States are fixed-dimension float vectors compared with the
+    chosen metric (Metric.ABSOLUTE requires dimension 1).
+    """
+
+    def __init__(
+        self,
+        epsilons: Sequence[float],
+        dim: int,
+        metric: Metric = Metric.EUCLIDEAN,
+    ) -> None:
+        values = _double_list(epsilons)
+        epsilon_array = _double_array(values)
+        out = ctypes.c_void_p()
+        status = _load_library().mc_coverage_meter_new(
+            epsilon_array,
+            len(values),
+            dim,
+            int(metric),
+            ctypes.byref(out),
+        )
+        _check(status)
+        if not out.value:
+            raise NativeStatusError(MC_STATUS_INVALID_ARGUMENT)
+        self._ptr = out.value
+        self._dim = int(dim)
+        self._tiers = len(values)
+
+    @property
+    def closed(self) -> bool:
+        return self._ptr is None
+
+    @property
+    def tier_count(self) -> int:
+        self._ensure_open()
+        out = ctypes.c_size_t()
+        status = _load_library().mc_coverage_meter_tier_count(
+            self._ptr, ctypes.byref(out)
+        )
+        _check(status)
+        return int(out.value)
+
+    @property
+    def counts(self) -> list[int]:
+        self._ensure_open()
+        out_len = ctypes.c_size_t()
+        out = (ctypes.c_uint64 * self._tiers)()
+        status = _load_library().mc_coverage_meter_counts(
+            self._ptr, out, self._tiers, ctypes.byref(out_len)
+        )
+        _check(status)
+        return [int(out[index]) for index in range(int(out_len.value))]
+
+    @property
+    def unique_representatives(self) -> int:
+        self._ensure_open()
+        out = ctypes.c_uint64()
+        status = _load_library().mc_coverage_meter_unique_representatives(
+            self._ptr, ctypes.byref(out)
+        )
+        _check(status)
+        return int(out.value)
+
+    def observe(self, state: Sequence[float]) -> list[bool]:
+        """Observe one sample; returns per-tier admission flags."""
+        self._ensure_open()
+        values = _double_list(state)
+        state_array = _double_array(values)
+        out = (ctypes.c_bool * self._tiers)()
+        out_len = ctypes.c_size_t()
+        status = _load_library().mc_coverage_meter_observe(
+            self._ptr,
+            state_array,
+            len(values),
+            out,
+            self._tiers,
+            ctypes.byref(out_len),
+        )
+        _check(status)
+        return [bool(out[index]) for index in range(int(out_len.value))]
+
+    def close(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr is not None:
+            _load_library().mc_coverage_meter_free(ptr)
+            self._ptr = None
+
+    def __enter__(self) -> "CoverageMeter":
+        self._ensure_open()
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        self.close()
+
+    def _ensure_open(self) -> None:
+        if getattr(self, "_ptr", None) is None:
+            raise RuntimeError("CoverageMeter is closed")
+
+
+def progress_efficiency(coverage: int, epsilon: float, path_length: float) -> float:
+    """Fraction of traversed metric length that acquired new territory."""
+    _ensure_uint64(coverage)
+    out = ctypes.c_double()
+    status = _load_library().mc_progress_efficiency(
+        coverage, epsilon, path_length, ctypes.byref(out)
+    )
+    _check(status)
+    return float(out.value)
+
+
+def classify_regime(throughput_delta: float, coverage_delta: int) -> OperatingRegime:
+    """Quadrant of a window: quiescent / progress / churn / creep."""
+    _ensure_uint64(coverage_delta)
+    raw = _load_library().mc_classify_regime(throughput_delta, coverage_delta)
+    return OperatingRegime(int(raw))
 
 
 class EventLog:

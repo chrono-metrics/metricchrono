@@ -39,6 +39,6 @@
     "access": "public"
   },
   "scripts": {
-    "test": "node test/golden.mjs && node test/browser-smoke.mjs"
+    "test": "node test/golden.mjs && node test/coverage.mjs && node test/browser-smoke.mjs"
   }
 }

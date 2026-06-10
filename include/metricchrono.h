@@ -24,6 +24,13 @@ typedef enum MCMetricId {
   MC_METRIC_ABSOLUTE = 1
 } MCMetricId;
 
+typedef enum MCRegime {
+  MC_REGIME_QUIESCENT = 0,
+  MC_REGIME_PROGRESS = 1,
+  MC_REGIME_CHURN = 2,
+  MC_REGIME_CREEP = 3
+} MCRegime;
+
 typedef enum MCNormalization {
   MC_NORMALIZATION_NONE = 0,
   MC_NORMALIZATION_UNIT_MAX = 1,
@@ -47,6 +54,7 @@ typedef struct MCZoomDecision {
 typedef struct MCLadder MCLadder;
 typedef struct MCEventLog MCEventLog;
 typedef struct MCPromotionCounter MCPromotionCounter;
+typedef struct MCCoverageMeter MCCoverageMeter;
 
 /* Caller-buffer/sizing APIs support a two-call protocol: out_len and other
  * sizing-out parameters are written even when MC_STATUS_BUFFER_TOO_SMALL is
@@ -157,6 +165,32 @@ MCStatus mc_promotion_counter_quotas(const MCPromotionCounter *counter,
                                      size_t *out_len);
 MCStatus mc_promotion_counter_reset(MCPromotionCounter *counter);
 void mc_promotion_counter_free(MCPromotionCounter *counter);
+
+MCStatus mc_coverage_meter_new(const double *epsilons,
+                               size_t len,
+                               size_t dim,
+                               int metric,
+                               MCCoverageMeter **out);
+MCStatus mc_coverage_meter_observe(MCCoverageMeter *meter,
+                                   const double *state,
+                                   size_t state_len,
+                                   bool *out,
+                                   size_t cap,
+                                   size_t *out_len);
+MCStatus mc_coverage_meter_counts(const MCCoverageMeter *meter,
+                                  uint64_t *out,
+                                  size_t cap,
+                                  size_t *out_len);
+MCStatus mc_coverage_meter_unique_representatives(const MCCoverageMeter *meter,
+                                                  uint64_t *out);
+MCStatus mc_coverage_meter_tier_count(const MCCoverageMeter *meter,
+                                      size_t *out);
+void mc_coverage_meter_free(MCCoverageMeter *meter);
+MCStatus mc_progress_efficiency(uint64_t coverage,
+                                double epsilon,
+                                double path_length,
+                                double *out);
+int mc_classify_regime(double throughput_delta, uint64_t coverage_delta);
 
 MCEventLog *mc_event_log_new(size_t tier_count);
 void mc_event_log_free(MCEventLog *log);
