@@ -2,9 +2,11 @@
 //!
 //! This crate contains the public primitive: single-scale ticks, multiscale
 //! ladders, basic metric traits, a smooth surrogate, a basic event log,
-//! adaptive zoom helpers, and minimal consensus utilities.
+//! adaptive zoom helpers, minimal consensus utilities, and the per-tier
+//! coverage meter (throughput's complementary read-out).
 
 mod consensus;
+mod coverage;
 mod error;
 mod event_log;
 mod ladder;
@@ -18,6 +20,7 @@ pub use consensus::{
     coherence_residual, coherence_residuals, simple_weight_update, tier_residuals,
     weighted_consensus, weighted_consensus_tierwise, ConsensusInput, ConsensusResult, SourceTick,
 };
+pub use coverage::{classify_regime, progress_efficiency, CoverageMeter, OperatingRegime};
 pub use error::{MetricChronoError, Result};
 pub use event_log::{EventId, EventLog, EventRecord, EventSummary, TierEventIter};
 pub use ladder::{

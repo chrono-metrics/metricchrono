@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Added: `CoverageMeter`, `progress_efficiency`, `classify_regime`, and
+  `OperatingRegime` in `metricchrono-core` — a per-tier streaming coverage
+  read-out (greedy maximal epsilon-packing of the visited image, holding
+  representatives only) complementary to the per-step tick throughput.
+  Coverage is invariant under revisits and detects sub-threshold relocation
+  (creep) that per-step thresholding is silent on by design; jointly with
+  throughput it classifies windows into quiescent / progress / churn / creep.
+  Rust-only for now: not yet exposed through the C ABI or the Python/JS
+  bindings.
+
 ## 0.3.0 (2026-06-09)
 
 - Added: Pre-built binary wheels on PyPI for Linux (manylinux x86_64 and
