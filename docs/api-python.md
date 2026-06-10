@@ -49,3 +49,24 @@ Versioned schema helpers are exported as `tier_from_schema`,
 `ladder_from_schema`, `tick_vector_from_schema`, and
 `consensus_result_from_schema`, with matching `*_to_schema` helpers where the
 Python API owns the value shape.
+
+## Coverage meter
+
+```python
+import metricchrono as mc
+
+meter = mc.CoverageMeter([0.1, 0.2], dim=2)            # built-in euclidean
+flags = meter.observe([0.0, 0.0])                      # per-tier admission
+meter.counts, meter.unique_representatives
+
+chebyshev = lambda a, b: max(abs(x - y) for x, y in zip(a, b))
+custom = mc.CoverageMeter([0.1], dim=2, metric=chebyshev)  # any callable
+
+mc.classify_regime(throughput_delta, coverage_delta)   # OperatingRegime
+mc.progress_efficiency(coverage, epsilon, path_length)
+```
+
+Coverage is the revisit-invariant complement to tick throughput; jointly they
+classify windows as quiescent / progress / churn / creep. Exceptions raised by
+a callable metric are converted to NaN, which rejects admission instead of
+unwinding into the C ABI.
