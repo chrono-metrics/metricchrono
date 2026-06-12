@@ -19,11 +19,14 @@ pub struct CfarDecision {
 /// alarm are computed before the finite value is pushed into the ring.
 ///
 /// The 1-indexed order-statistic rank is
-/// `ceil((1 - target_fp) * (R + 1))`, clamped to `[1, R]`.  With a tie-free
-/// exchangeable test value and `R` reference values, the test rank among the
-/// `R + 1` values is uniform, so
-/// `P(value > threshold) = (R + 1 - rank) / (R + 1) <= target_fp`.  With ties,
-/// the strict `>` rule is conservative.
+/// `ceil((1 - target_fp) * (R + 1))`, clamped to `[1, R]`.  When
+/// `target_fp >= 1 / (R + 1)`, a tie-free exchangeable test value has uniform
+/// rank among the `R + 1` values, so
+/// `P(value > threshold) = (R + 1 - rank) / (R + 1) <= target_fp`.  Smaller
+/// requested targets clamp to rank `R`, the most conservative available
+/// threshold; the achievable tie-free rate is then the finite-reference floor
+/// `1 / (R + 1)`, which is above the requested target.  With ties, the strict
+/// `>` rule is conservative.
 ///
 /// NaN is the safe no-decision input, mirroring the coverage meter's
 /// NaN-rejecting behavior: NaN observations return `None`, never alarm, and are
