@@ -2,9 +2,11 @@
 //!
 //! This crate contains the public primitive: single-scale ticks, multiscale
 //! ladders, basic metric traits, a smooth surrogate, a basic event log,
-//! adaptive zoom helpers, minimal consensus utilities, and the per-tier
-//! coverage meter (throughput's complementary read-out).
+//! adaptive zoom helpers, minimal consensus utilities, the per-tier coverage
+//! meter (throughput's complementary read-out), and guarded ambient CFAR
+//! estimators.
 
+mod ambient;
 mod consensus;
 mod coverage;
 mod error;
@@ -16,6 +18,7 @@ mod smooth;
 mod tier;
 mod zoom;
 
+pub use ambient::{CfarDecision, GuardedAmbientScale, GuardedQuantileThreshold};
 pub use consensus::{
     coherence_residual, coherence_residuals, simple_weight_update, tier_residuals,
     weighted_consensus, weighted_consensus_tierwise, ConsensusInput, ConsensusResult, SourceTick,

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Added: `GuardedQuantileThreshold`, `GuardedAmbientScale`, and
+  `CfarDecision` in `metricchrono-core` for causal guarded ambient CFAR
+  thresholds, detection floors, and robust distance normalization.
+
 ## 0.4.0 (2026-06-11)
 
 - Added: `CoverageMeter`, `progress_efficiency`, `classify_regime`, and
