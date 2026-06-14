@@ -11,6 +11,7 @@ mod consensus;
 mod coverage;
 mod error;
 mod event_log;
+mod geometry;
 mod ladder;
 mod metrics;
 mod rate_distortion;
@@ -27,6 +28,10 @@ pub use consensus::{
 pub use coverage::{classify_regime, progress_efficiency, CoverageMeter, OperatingRegime};
 pub use error::{MetricChronoError, Result};
 pub use event_log::{EventId, EventLog, EventRecord, EventSummary, TierEventIter};
+pub use geometry::{
+    branching_number, comparison_angle, comparison_angle_unchecked, greedy_packing, radial_sort,
+    shell_index, shell_indices,
+};
 pub use ladder::{
     carry_rules, custom_ladder, geometric_ladder, ladder_distance, ladder_values, normalize_ticks,
     tick_distance, try_tick_distance, validate_ladder, Ladder, Normalization, PromotionCounter,
