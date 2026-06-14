@@ -202,8 +202,7 @@ mod tests {
 
     #[test]
     fn cfar_warms_up_then_decides() {
-        let mut session =
-            Session::with_cfar(test_ladder(), 5, 2, 0.2).expect("valid cfar config");
+        let mut session = Session::with_cfar(test_ladder(), 5, 2, 0.2).expect("valid cfar config");
         // First 7 steps (5 ref + 2 guard): CFAR returns None
         for i in 0..8 {
             let result = session.observe(&Absolute, &(i as f64 * 0.01));

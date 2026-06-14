@@ -73,7 +73,12 @@ pub fn branching_number(radii: &[f64], distances: &[Vec<f64>], epsilon: f64, del
         .collect();
     let sub_distances: Vec<Vec<f64>> = eligible
         .iter()
-        .map(|&i| eligible.iter().map(|&j| distance_at(distances, i, j)).collect())
+        .map(|&i| {
+            eligible
+                .iter()
+                .map(|&j| distance_at(distances, i, j))
+                .collect()
+        })
         .collect();
     greedy_packing(&sub_distances, epsilon).len()
 }

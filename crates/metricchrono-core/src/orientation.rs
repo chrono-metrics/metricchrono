@@ -27,7 +27,9 @@ pub fn discrete_derivative(xs: &[f64], order: usize) -> Result<Vec<f64>> {
 /// Returns `H = -sum_i p_i ln(p_i)` where `p_i = w_i / sum(w)`.
 pub fn entropy_openness(weights: &[f64]) -> Result<f64> {
     if weights.is_empty() {
-        return Err(MetricChronoError::InvalidArgument("weights must be non-empty"));
+        return Err(MetricChronoError::InvalidArgument(
+            "weights must be non-empty",
+        ));
     }
     let total: f64 = weights.iter().copied().filter(|w| *w > 0.0).sum();
     if total <= 0.0 {

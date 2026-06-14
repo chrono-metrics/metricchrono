@@ -168,10 +168,7 @@ mod tests {
 
     #[test]
     fn log_bisection_pse_is_geometric_mean() {
-        assert_close(
-            log_bisection_pse(0.4, 1.6).expect("valid pair"),
-            0.8,
-        );
+        assert_close(log_bisection_pse(0.4, 1.6).expect("valid pair"), 0.8);
     }
 
     #[test]
@@ -189,10 +186,7 @@ mod tests {
 
     #[test]
     fn magnitude_bisection_pse_at_s_one_is_arithmetic() {
-        assert_close(
-            magnitude_bisection_pse(0.4, 1.6, 1.0).expect("valid"),
-            1.0,
-        );
+        assert_close(magnitude_bisection_pse(0.4, 1.6, 1.0).expect("valid"), 1.0);
     }
 
     #[test]
@@ -256,9 +250,8 @@ mod tests {
         let mu_base = vierordt_crossover(delta_0, alpha, m).expect("valid");
 
         for &lam in &[0.5, 2.0, 5.0] {
-            let s_scaled = aggregate_slope(
-                lam * eps_0, lam * delta_0, alpha, p, m, lam * eps_ref,
-            ).expect("valid");
+            let s_scaled = aggregate_slope(lam * eps_0, lam * delta_0, alpha, p, m, lam * eps_ref)
+                .expect("valid");
             let mu_scaled = vierordt_crossover(lam * delta_0, alpha, m).expect("valid");
             assert_close(s_scaled, s_base);
             assert_close(mu_scaled / mu_base, lam);

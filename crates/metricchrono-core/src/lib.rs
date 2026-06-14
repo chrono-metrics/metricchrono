@@ -55,7 +55,9 @@ pub use psychophysics::{
     aggregate_slope, compressed_readout, log_bisection_pse, magnitude_bisection_pse,
     vierordt_crossover,
 };
-pub use rate_distortion::{geometric_boundaries, harmonic_mean_representative, staircase_penalty_ratio};
+pub use rate_distortion::{
+    geometric_boundaries, harmonic_mean_representative, staircase_penalty_ratio,
+};
 pub use schema::{ConsensusResultDocument, LadderDocument, TickVectorDocument, TierDocument};
 pub use session::{Session, StepResult};
 pub use smooth::{

@@ -36,7 +36,9 @@ pub fn factored_threshold(sigma: f64, n: usize, alpha: f64, q: f64) -> Result<f6
 pub fn unified_threshold(sigma: f64, n: usize, alpha: f64, p: f64, q: f64) -> Result<f64> {
     ensure_crossover_params(sigma, n, alpha, q)?;
     if !p.is_finite() || p < 1.0 {
-        return Err(MetricChronoError::InvalidArgument("p must be finite and >= 1"));
+        return Err(MetricChronoError::InvalidArgument(
+            "p must be finite and >= 1",
+        ));
     }
     if q <= p {
         return Err(MetricChronoError::InvalidArgument(
@@ -44,7 +46,12 @@ pub fn unified_threshold(sigma: f64, n: usize, alpha: f64, p: f64, q: f64) -> Re
         ));
     }
     let k = kappa_pq(p, q);
-    Ok(sigma * k.powf(-1.0 / p) * (n as f64).powf(1.0 / p) * alpha.recip().ln().powf(1.0 / (p * q)))
+    Ok(
+        sigma
+            * k.powf(-1.0 / p)
+            * (n as f64).powf(1.0 / p)
+            * alpha.recip().ln().powf(1.0 / (p * q)),
+    )
 }
 
 /// Asymptotic threshold ratio `eps_0 / eps`.
@@ -60,14 +67,20 @@ pub fn threshold_ratio(n: usize, alpha: f64, p: f64, q: f64) -> Result<f64> {
         ));
     }
     if !p.is_finite() || p < 1.0 {
-        return Err(MetricChronoError::InvalidArgument("p must be finite and >= 1"));
+        return Err(MetricChronoError::InvalidArgument(
+            "p must be finite and >= 1",
+        ));
     }
     if !q.is_finite() || q <= p {
-        return Err(MetricChronoError::InvalidArgument("q must be finite and > p"));
+        return Err(MetricChronoError::InvalidArgument(
+            "q must be finite and > p",
+        ));
     }
     let k = kappa_pq(p, q);
     let nf = n as f64;
-    Ok(k.powf(1.0 / p) * nf.powf(-1.0 / p) * nf.ln().powf(1.0 / q)
+    Ok(k.powf(1.0 / p)
+        * nf.powf(-1.0 / p)
+        * nf.ln().powf(1.0 / q)
         * alpha.recip().ln().powf(-1.0 / (p * q)))
 }
 
