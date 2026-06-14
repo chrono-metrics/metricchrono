@@ -7,6 +7,7 @@
 //! estimators.
 
 mod ambient;
+mod comparator;
 mod consensus;
 mod coverage;
 mod error;
@@ -14,6 +15,8 @@ mod event_log;
 mod geometry;
 mod ladder;
 mod metrics;
+mod orientation;
+mod psychophysics;
 mod rate_distortion;
 mod schema;
 mod smooth;
@@ -21,6 +24,10 @@ mod tier;
 mod zoom;
 
 pub use ambient::{CfarDecision, GuardedAmbientScale, GuardedQuantileThreshold};
+pub use comparator::{
+    factored_threshold, inscribed_threshold, kappa_pq, miss_probability_bound, power_loss_proxy,
+    sparse_dominance_boundary, threshold_ratio, unified_threshold,
+};
 pub use consensus::{
     coherence_residual, coherence_residuals, simple_weight_update, tier_residuals,
     weighted_consensus, weighted_consensus_tierwise, ConsensusInput, ConsensusResult, SourceTick,
@@ -41,6 +48,14 @@ pub use metrics::{ladder_pair, tick_pair, Absolute, Euclidean, Metric, MetricFn}
 #[cfg(feature = "metrics-extra")]
 pub use metrics::{
     Cosine, DiagonalMahalanobis, JensenShannon, KullbackLeibler, Manhattan, SquaredEuclidean,
+};
+pub use orientation::{
+    discrete_derivative, discrete_derivatives, earth_mover_1d, entropy_openness,
+    reversal_parity_error,
+};
+pub use psychophysics::{
+    aggregate_slope, compressed_readout, log_bisection_pse, magnitude_bisection_pse,
+    vierordt_bias, vierordt_crossover,
 };
 pub use rate_distortion::{
     geometric_boundaries, geometric_midpoint_representative, harmonic_mean_representative,
