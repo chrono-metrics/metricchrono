@@ -9,6 +9,9 @@ use crate::{MetricChronoError, Result};
 /// Defined for `q > p`; returns `f64::INFINITY` when `q <= p` (unified
 /// dominance regime).
 pub fn kappa_pq(p: f64, q: f64) -> f64 {
+    if !p.is_finite() || p <= 0.0 || !q.is_finite() || q <= 0.0 {
+        return f64::NAN;
+    }
     if q <= p {
         return f64::INFINITY;
     }
@@ -105,7 +108,7 @@ pub fn miss_probability_bound(eps: f64, eps_0: f64, n: usize) -> Result<f64> {
         return Err(MetricChronoError::InvalidArgument("n must be >= 1"));
     }
     let base = eps_0 * (n as f64).sqrt() / eps;
-    Ok(base.powi(n as i32))
+    Ok(base.powf(n as f64))
 }
 
 /// Inscribed per-axis threshold: `eps_0 = eps / sqrt(n)`.
@@ -129,7 +132,7 @@ pub fn power_loss_proxy(n: usize) -> f64 {
     if n < 2 {
         return 1.0;
     }
-    (n as f64).sqrt().powi(n as i32 - 2)
+    (n as f64).sqrt().powf(n as f64 - 2.0)
 }
 
 fn ensure_crossover_params(sigma: f64, n: usize, alpha: f64, q: f64) -> Result<()> {
@@ -236,5 +239,59 @@ mod tests {
     fn power_loss_proxy_basic() {
         let p = power_loss_proxy(4);
         assert_close(p, 2.0_f64.powi(2));
+    }
+
+    #[test]
+    fn kappa_pq_nan_for_invalid_inputs() {
+        assert!(kappa_pq(0.0, 2.0).is_nan());
+        assert!(kappa_pq(-1.0, 2.0).is_nan());
+        assert!(kappa_pq(f64::NAN, 2.0).is_nan());
+        assert!(kappa_pq(1.0, f64::NAN).is_nan());
+        assert!(kappa_pq(1.0, 0.0).is_nan());
+    }
+
+    #[test]
+    fn kappa_pq_p2_q4() {
+        let k = kappa_pq(2.0, 4.0);
+        let expected = (1.0 / 2.0) * 2.0_f64.powf(2.0) * 0.5_f64.powf(0.5);
+        assert_close(k, expected);
+    }
+
+    #[test]
+    fn unified_threshold_exact_formula() {
+        let sigma = 1.0;
+        let n = 100_usize;
+        let alpha = 0.05;
+        let p = 1.0;
+        let q = 2.0;
+        let t = unified_threshold(sigma, n, alpha, p, q).expect("valid");
+        let k = kappa_pq(p, q);
+        let expected = sigma * k.powf(-1.0 / p) * (n as f64).powf(1.0 / p)
+            * alpha.recip().ln().powf(1.0 / (p * q));
+        assert_close(t, expected);
+    }
+
+    #[test]
+    fn threshold_ratio_exact_formula() {
+        let n = 50_usize;
+        let alpha = 0.01;
+        let p = 2.0;
+        let q = 4.0;
+        let r = threshold_ratio(n, alpha, p, q).expect("valid");
+        let k = kappa_pq(p, q);
+        let nf = n as f64;
+        let expected = k.powf(1.0 / p) * nf.powf(-1.0 / p) * nf.ln().powf(1.0 / q)
+            * alpha.recip().ln().powf(-1.0 / (p * q));
+        assert_close(r, expected);
+    }
+
+    #[test]
+    fn miss_probability_uses_powf_not_powi() {
+        let n = 100;
+        let eps = 10.0;
+        let eps_0 = 0.1;
+        let bound = miss_probability_bound(eps, eps_0, n).expect("valid");
+        let base = eps_0 * (n as f64).sqrt() / eps;
+        assert_close(bound, base.powf(n as f64));
     }
 }

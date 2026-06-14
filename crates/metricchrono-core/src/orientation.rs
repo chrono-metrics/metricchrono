@@ -15,6 +15,7 @@ pub fn discrete_derivatives(xs: &[f64]) -> Result<(Vec<f64>, Vec<f64>, Vec<f64>)
             "need at least 4 values for velocity, acceleration, and jerk",
         ));
     }
+    ensure_finite_slice(xs)?;
     let velocity: Vec<f64> = xs.windows(2).map(|w| w[1] - w[0]).collect();
     let acceleration: Vec<f64> = velocity.windows(2).map(|w| w[1] - w[0]).collect();
     let jerk: Vec<f64> = acceleration.windows(2).map(|w| w[1] - w[0]).collect();
@@ -34,6 +35,7 @@ pub fn discrete_derivative(xs: &[f64], order: usize) -> Result<Vec<f64>> {
             "signal too short for the requested derivative order",
         ));
     }
+    ensure_finite_slice(xs)?;
     let mut current = xs.to_vec();
     for _ in 0..order {
         current = current.windows(2).map(|w| w[1] - w[0]).collect();
@@ -85,6 +87,8 @@ pub fn earth_mover_1d(p: &[f64], q: &[f64]) -> Result<f64> {
             "distributions must be non-empty",
         ));
     }
+    ensure_finite_slice(p)?;
+    ensure_finite_slice(q)?;
     let mut cumulative = 0.0;
     let mut distance = 0.0;
     for (pi, qi) in p.iter().zip(q.iter()) {
@@ -113,6 +117,15 @@ pub fn reversal_parity_error(xs: &[f64], order: usize) -> Result<f64> {
         max_err = max_err.max((actual - expected).abs());
     }
     Ok(max_err)
+}
+
+fn ensure_finite_slice(xs: &[f64]) -> Result<()> {
+    if xs.iter().any(|x| !x.is_finite()) {
+        return Err(MetricChronoError::InvalidArgument(
+            "input must contain only finite values (no NaN or infinity)",
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -202,5 +215,41 @@ mod tests {
     #[test]
     fn earth_mover_rejects_length_mismatch() {
         assert!(earth_mover_1d(&[0.5, 0.5], &[1.0]).is_err());
+    }
+
+    #[test]
+    fn earth_mover_is_symmetric() {
+        let p = [0.5, 0.3, 0.2];
+        let q = [0.1, 0.6, 0.3];
+        let d1 = earth_mover_1d(&p, &q).expect("valid");
+        let d2 = earth_mover_1d(&q, &p).expect("valid");
+        assert_close(d1, d2);
+    }
+
+    #[test]
+    fn discrete_derivative_second_order_quadratic() {
+        let xs: Vec<f64> = (0..6).map(|i| (i * i) as f64).collect();
+        let d2 = discrete_derivative(&xs, 2).expect("valid");
+        assert_eq!(d2.len(), 4);
+        assert!(d2.iter().all(|x| (*x - 2.0).abs() < 1e-12));
+    }
+
+    #[test]
+    fn reversal_parity_order_zero_is_trivial() {
+        let xs = [1.0, 3.0, 2.0, 7.0];
+        let err = reversal_parity_error(&xs, 0).expect("valid");
+        assert!(err < 1e-12, "order-0 parity error: {err}");
+    }
+
+    #[test]
+    fn nan_input_rejected_by_derivatives() {
+        assert!(discrete_derivatives(&[1.0, f64::NAN, 3.0, 4.0]).is_err());
+        assert!(discrete_derivative(&[1.0, f64::INFINITY, 3.0], 1).is_err());
+    }
+
+    #[test]
+    fn nan_input_rejected_by_earth_mover() {
+        assert!(earth_mover_1d(&[0.5, f64::NAN], &[0.5, 0.5]).is_err());
+        assert!(earth_mover_1d(&[0.5, 0.5], &[f64::INFINITY, 0.5]).is_err());
     }
 }
