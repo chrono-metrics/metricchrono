@@ -78,11 +78,7 @@ pub fn earth_mover_1d(p: &[f64], q: &[f64]) -> Result<f64> {
     Ok(distance)
 }
 
-/// Check reversal parity of the `k`-th discrete derivative.
-///
-/// Given a signal `xs`, computes the `k`-th derivative of `xs` and of its
-/// reversal, and checks that `D^k(rev)[i] = (-1)^k * D^k(xs)[n-k-1-i]`.
-/// Returns the maximum absolute violation.
+#[cfg(test)]
 pub(crate) fn reversal_parity_error(xs: &[f64], order: usize) -> Result<f64> {
     let forward = discrete_derivative(xs, order)?;
     let reversed: Vec<f64> = xs.iter().copied().rev().collect();

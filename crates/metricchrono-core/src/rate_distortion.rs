@@ -42,9 +42,7 @@ pub fn harmonic_mean_representative(t_lo: f64, t_hi: f64) -> f64 {
     2.0 * t_lo * t_hi / (t_lo + t_hi)
 }
 
-/// Verify Lloyd fixed-point condition: for geometric boundaries with harmonic
-/// representatives, the nearest-neighbour boundaries match the geometric boundaries.
-/// Returns the maximum relative error across all boundaries.
+#[cfg(test)]
 pub(crate) fn lloyd_fixed_point_error(a: f64, b: f64, n: usize) -> Result<f64> {
     let boundaries = geometric_boundaries(a, b, n)?;
     let representatives: Vec<f64> = boundaries
