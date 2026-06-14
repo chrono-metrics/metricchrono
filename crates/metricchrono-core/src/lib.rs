@@ -19,6 +19,7 @@ mod orientation;
 mod psychophysics;
 mod rate_distortion;
 mod schema;
+mod session;
 mod smooth;
 mod tier;
 mod zoom;
@@ -56,6 +57,7 @@ pub use psychophysics::{
 };
 pub use rate_distortion::{geometric_boundaries, harmonic_mean_representative, staircase_penalty_ratio};
 pub use schema::{ConsensusResultDocument, LadderDocument, TickVectorDocument, TierDocument};
+pub use session::{Session, StepResult};
 pub use smooth::{
     smooth_ladder_distance, smooth_ladder_values, smooth_tick_distance, SmoothParams,
 };
