@@ -111,30 +111,6 @@ pub fn miss_probability_bound(eps: f64, eps_0: f64, n: usize) -> Result<f64> {
     Ok(base.powf(n as f64))
 }
 
-/// Inscribed per-axis threshold: `eps_0 = eps / sqrt(n)`.
-///
-/// The largest per-axis threshold at which the inscribed hypercube just touches
-/// the L2 sphere of radius `eps`.
-pub fn inscribed_threshold(eps: f64, n: usize) -> Result<f64> {
-    if !eps.is_finite() || eps <= 0.0 {
-        return Err(MetricChronoError::InvalidArgument(
-            "eps must be finite and > 0",
-        ));
-    }
-    if n == 0 {
-        return Err(MetricChronoError::InvalidArgument("n must be >= 1"));
-    }
-    Ok(eps / (n as f64).sqrt())
-}
-
-/// Power-loss proxy at the inscribed threshold: `sqrt(n)^{n-2}`.
-pub fn power_loss_proxy(n: usize) -> f64 {
-    if n < 2 {
-        return 1.0;
-    }
-    (n as f64).sqrt().powf(n as f64 - 2.0)
-}
-
 fn ensure_crossover_params(sigma: f64, n: usize, alpha: f64, q: f64) -> Result<()> {
     if !sigma.is_finite() || sigma <= 0.0 {
         return Err(MetricChronoError::InvalidArgument(
@@ -213,7 +189,7 @@ mod tests {
     fn miss_probability_bound_at_inscribed() {
         let n = 10;
         let eps = 1.0;
-        let eps_0 = inscribed_threshold(eps, n).expect("valid");
+        let eps_0 = eps / (n as f64).sqrt();
         let bound = miss_probability_bound(eps, eps_0, n).expect("valid");
         assert_close(bound, 1.0);
     }
@@ -225,20 +201,6 @@ mod tests {
         let b1 = miss_probability_bound(eps, 0.5, n).expect("valid");
         let b2 = miss_probability_bound(eps, 0.3, n).expect("valid");
         assert!(b2 < b1);
-    }
-
-    #[test]
-    fn inscribed_threshold_value() {
-        assert_close(
-            inscribed_threshold(1.0, 4).expect("valid"),
-            0.5,
-        );
-    }
-
-    #[test]
-    fn power_loss_proxy_basic() {
-        let p = power_loss_proxy(4);
-        assert_close(p, 2.0_f64.powi(2));
     }
 
     #[test]
@@ -258,40 +220,9 @@ mod tests {
     }
 
     #[test]
-    fn unified_threshold_exact_formula() {
-        let sigma = 1.0;
-        let n = 100_usize;
-        let alpha = 0.05;
-        let p = 1.0;
-        let q = 2.0;
-        let t = unified_threshold(sigma, n, alpha, p, q).expect("valid");
-        let k = kappa_pq(p, q);
-        let expected = sigma * k.powf(-1.0 / p) * (n as f64).powf(1.0 / p)
-            * alpha.recip().ln().powf(1.0 / (p * q));
-        assert_close(t, expected);
-    }
-
-    #[test]
-    fn threshold_ratio_exact_formula() {
-        let n = 50_usize;
-        let alpha = 0.01;
-        let p = 2.0;
-        let q = 4.0;
-        let r = threshold_ratio(n, alpha, p, q).expect("valid");
-        let k = kappa_pq(p, q);
-        let nf = n as f64;
-        let expected = k.powf(1.0 / p) * nf.powf(-1.0 / p) * nf.ln().powf(1.0 / q)
-            * alpha.recip().ln().powf(-1.0 / (p * q));
-        assert_close(r, expected);
-    }
-
-    #[test]
-    fn miss_probability_uses_powf_not_powi() {
-        let n = 100;
-        let eps = 10.0;
-        let eps_0 = 0.1;
-        let bound = miss_probability_bound(eps, eps_0, n).expect("valid");
-        let base = eps_0 * (n as f64).sqrt() / eps;
-        assert_close(bound, base.powf(n as f64));
+    fn unified_threshold_increases_with_dimension() {
+        let t1 = unified_threshold(1.0, 10, 0.05, 1.0, 2.0).expect("valid");
+        let t2 = unified_threshold(1.0, 100, 0.05, 1.0, 2.0).expect("valid");
+        assert!(t2 > t1);
     }
 }

@@ -25,8 +25,8 @@ mod zoom;
 
 pub use ambient::{CfarDecision, GuardedAmbientScale, GuardedQuantileThreshold};
 pub use comparator::{
-    factored_threshold, inscribed_threshold, kappa_pq, miss_probability_bound, power_loss_proxy,
-    sparse_dominance_boundary, threshold_ratio, unified_threshold,
+    factored_threshold, kappa_pq, miss_probability_bound, sparse_dominance_boundary,
+    threshold_ratio, unified_threshold,
 };
 pub use consensus::{
     coherence_residual, coherence_residuals, simple_weight_update, tier_residuals,
@@ -49,19 +49,12 @@ pub use metrics::{ladder_pair, tick_pair, Absolute, Euclidean, Metric, MetricFn}
 pub use metrics::{
     Cosine, DiagonalMahalanobis, JensenShannon, KullbackLeibler, Manhattan, SquaredEuclidean,
 };
-pub use orientation::{
-    discrete_derivative, discrete_derivatives, earth_mover_1d, entropy_openness,
-    reversal_parity_error,
-};
+pub use orientation::{discrete_derivative, earth_mover_1d, entropy_openness};
 pub use psychophysics::{
     aggregate_slope, compressed_readout, log_bisection_pse, magnitude_bisection_pse,
-    vierordt_bias, vierordt_crossover,
+    vierordt_crossover,
 };
-pub use rate_distortion::{
-    geometric_boundaries, geometric_midpoint_representative, harmonic_mean_representative,
-    lloyd_fixed_point_error, nearest_neighbour_boundary, optimal_distortion, relative_distortion,
-    staircase_penalty_ratio,
-};
+pub use rate_distortion::{geometric_boundaries, harmonic_mean_representative, staircase_penalty_ratio};
 pub use schema::{ConsensusResultDocument, LadderDocument, TickVectorDocument, TierDocument};
 pub use smooth::{
     smooth_ladder_distance, smooth_ladder_values, smooth_tick_distance, SmoothParams,

@@ -9,14 +9,6 @@ pub fn compressed_readout(d: f64, s: f64, mu: f64) -> f64 {
     mu.powf(1.0 - s) * d.powf(s)
 }
 
-/// Vierordt bias: `compressed_readout(d, s, mu) - d`.
-///
-/// Positive when `d < mu` (overestimation), negative when `d > mu`
-/// (underestimation), zero at `d = mu`.
-pub fn vierordt_bias(d: f64, s: f64, mu: f64) -> f64 {
-    compressed_readout(d, s, mu) - d
-}
-
 /// Bisection PSE under the log decision convention: `sqrt(t_short * t_long)`.
 ///
 /// Independent of every ladder parameter (`s`, `mu`, hence `m`, `alpha`, `p`,
@@ -110,8 +102,8 @@ pub fn aggregate_slope(
 
 /// Vierordt crossover point for a geometric ladder: `delta_0 * alpha^((m-1)/2)`.
 ///
-/// This is the geometric mean of the `delta_k` values and the unique zero of
-/// `vierordt_bias`.
+/// This is the geometric mean of the `delta_k` values and the unique point
+/// where `compressed_readout(mu, s, mu) == mu` (zero Vierordt bias).
 pub fn vierordt_crossover(delta_0: f64, alpha: f64, m: usize) -> Result<f64> {
     if !delta_0.is_finite() || delta_0 <= 0.0 {
         return Err(MetricChronoError::InvalidArgument(
@@ -165,18 +157,13 @@ mod tests {
     }
 
     #[test]
-    fn vierordt_bias_zero_at_mu() {
-        assert_close(vierordt_bias(2.0, 0.6, 2.0), 0.0);
+    fn compressed_readout_overestimates_below_mu() {
+        assert!(compressed_readout(0.5, 0.6, 2.0) > 0.5);
     }
 
     #[test]
-    fn vierordt_bias_positive_below_mu() {
-        assert!(vierordt_bias(0.5, 0.6, 2.0) > 0.0);
-    }
-
-    #[test]
-    fn vierordt_bias_negative_above_mu() {
-        assert!(vierordt_bias(5.0, 0.6, 2.0) < 0.0);
+    fn compressed_readout_underestimates_above_mu() {
+        assert!(compressed_readout(5.0, 0.6, 2.0) < 5.0);
     }
 
     #[test]

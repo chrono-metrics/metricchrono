@@ -66,28 +66,16 @@ pub fn greedy_packing(distances: &[Vec<f64>], epsilon: f64) -> Vec<usize> {
 /// the true packing numbers. Given radii and pairwise distances, selects points
 /// with `r <= delta`, then counts the maximal epsilon-separated subset.
 pub fn branching_number(radii: &[f64], distances: &[Vec<f64>], epsilon: f64, delta: f64) -> usize {
-    let eligible = radii
+    let eligible: Vec<usize> = radii
         .iter()
         .enumerate()
         .filter_map(|(index, radius)| (*radius <= delta).then_some(index))
-        .collect::<Vec<_>>();
-    let mut marked = vec![false; eligible.len()];
-    let mut count = 0;
-
-    while let Some(packed_index) = marked.iter().position(|is_marked| !*is_marked) {
-        let picked = eligible[packed_index];
-        count += 1;
-        marked[packed_index] = true;
-
-        for (candidate_index, is_marked) in marked.iter_mut().enumerate() {
-            let candidate = eligible[candidate_index];
-            if distance_at(distances, picked, candidate) < epsilon {
-                *is_marked = true;
-            }
-        }
-    }
-
-    count
+        .collect();
+    let sub_distances: Vec<Vec<f64>> = eligible
+        .iter()
+        .map(|&i| eligible.iter().map(|&j| distance_at(distances, i, j)).collect())
+        .collect();
+    greedy_packing(&sub_distances, epsilon).len()
 }
 
 /// Sort futures by radius (ascending). Returns permutation indices.

@@ -1,27 +1,5 @@
 use crate::{MetricChronoError, Result};
 
-/// Discrete derivatives of a signal: velocity, acceleration, jerk.
-///
-/// Given a sequence `xs` of length `n`, returns three vectors:
-/// - velocity:     length `n-1`, `v[i] = xs[i+1] - xs[i]`
-/// - acceleration: length `n-2`, `a[i] = v[i+1] - v[i]`
-/// - jerk:         length `n-3`, `j[i] = a[i+1] - a[i]`
-///
-/// These are the first three backward differences. The `k`-th derivative
-/// carries reversal parity `(-1)^k` (Prop reversal_parity).
-pub fn discrete_derivatives(xs: &[f64]) -> Result<(Vec<f64>, Vec<f64>, Vec<f64>)> {
-    if xs.len() < 4 {
-        return Err(MetricChronoError::InvalidArgument(
-            "need at least 4 values for velocity, acceleration, and jerk",
-        ));
-    }
-    ensure_finite_slice(xs)?;
-    let velocity: Vec<f64> = xs.windows(2).map(|w| w[1] - w[0]).collect();
-    let acceleration: Vec<f64> = velocity.windows(2).map(|w| w[1] - w[0]).collect();
-    let jerk: Vec<f64> = acceleration.windows(2).map(|w| w[1] - w[0]).collect();
-    Ok((velocity, acceleration, jerk))
-}
-
 /// `k`-th order discrete derivative of a signal.
 ///
 /// Returns a vector of length `n - k`. The `k`-th derivative carries reversal
@@ -103,7 +81,7 @@ pub fn earth_mover_1d(p: &[f64], q: &[f64]) -> Result<f64> {
 /// Given a signal `xs`, computes the `k`-th derivative of `xs` and of its
 /// reversal, and checks that `D^k(rev)[i] = (-1)^k * D^k(xs)[n-k-1-i]`.
 /// Returns the maximum absolute violation.
-pub fn reversal_parity_error(xs: &[f64], order: usize) -> Result<f64> {
+pub(crate) fn reversal_parity_error(xs: &[f64], order: usize) -> Result<f64> {
     let forward = discrete_derivative(xs, order)?;
     let reversed: Vec<f64> = xs.iter().copied().rev().collect();
     let rev_deriv = discrete_derivative(&reversed, order)?;
@@ -137,31 +115,6 @@ mod tests {
             (actual - expected).abs() <= 1e-12,
             "expected {expected}, got {actual}"
         );
-    }
-
-    #[test]
-    fn discrete_derivatives_linear() {
-        let xs = [1.0, 2.0, 3.0, 4.0, 5.0];
-        let (v, a, j) = discrete_derivatives(&xs).expect("valid");
-        assert!(v.iter().all(|x| (*x - 1.0).abs() < 1e-12));
-        assert!(a.iter().all(|x| x.abs() < 1e-12));
-        assert!(j.iter().all(|x| x.abs() < 1e-12));
-    }
-
-    #[test]
-    fn discrete_derivatives_quadratic() {
-        let xs: Vec<f64> = (0..6).map(|i| (i * i) as f64).collect();
-        let (v, a, j) = discrete_derivatives(&xs).expect("valid");
-        assert_eq!(v.len(), 5);
-        assert_eq!(a.len(), 4);
-        assert!(a.iter().all(|x| (*x - 2.0).abs() < 1e-12));
-        assert!(j.iter().all(|x| x.abs() < 1e-12));
-        let _ = v;
-    }
-
-    #[test]
-    fn discrete_derivatives_rejects_short_input() {
-        assert!(discrete_derivatives(&[1.0, 2.0, 3.0]).is_err());
     }
 
     #[test]
@@ -243,7 +196,7 @@ mod tests {
 
     #[test]
     fn nan_input_rejected_by_derivatives() {
-        assert!(discrete_derivatives(&[1.0, f64::NAN, 3.0, 4.0]).is_err());
+        assert!(discrete_derivative(&[1.0, f64::NAN, 3.0, 4.0], 1).is_err());
         assert!(discrete_derivative(&[1.0, f64::INFINITY, 3.0], 1).is_err());
     }
 
