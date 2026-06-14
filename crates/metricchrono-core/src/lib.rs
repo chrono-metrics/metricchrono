@@ -13,6 +13,7 @@ mod error;
 mod event_log;
 mod ladder;
 mod metrics;
+mod rate_distortion;
 mod schema;
 mod smooth;
 mod tier;
@@ -35,6 +36,11 @@ pub use metrics::{ladder_pair, tick_pair, Absolute, Euclidean, Metric, MetricFn}
 #[cfg(feature = "metrics-extra")]
 pub use metrics::{
     Cosine, DiagonalMahalanobis, JensenShannon, KullbackLeibler, Manhattan, SquaredEuclidean,
+};
+pub use rate_distortion::{
+    geometric_boundaries, geometric_midpoint_representative, harmonic_mean_representative,
+    lloyd_fixed_point_error, nearest_neighbour_boundary, optimal_distortion, relative_distortion,
+    staircase_penalty_ratio,
 };
 pub use schema::{ConsensusResultDocument, LadderDocument, TickVectorDocument, TierDocument};
 pub use smooth::{
