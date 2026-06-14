@@ -36,6 +36,9 @@ pub struct CoverageMeter<T> {
     /// Per-pool-entry `(generation, distance)` memo for the current observe.
     scratch: Vec<(u64, f64)>,
     generation: u64,
+    /// Optional pool capacity.  When set, the oldest half of the pool is
+    /// evicted whenever the pool reaches this size, keeping memory bounded.
+    max_pool: Option<usize>,
 }
 
 impl<T> CoverageMeter<T> {
@@ -51,6 +54,7 @@ impl<T> CoverageMeter<T> {
             tier_members,
             scratch: Vec::new(),
             generation: 0,
+            max_pool: None,
         }
     }
 
@@ -75,6 +79,7 @@ impl<T> CoverageMeter<T> {
             tier_members,
             scratch: Vec::new(),
             generation: 0,
+            max_pool: None,
         })
     }
 
@@ -109,6 +114,45 @@ impl<T> CoverageMeter<T> {
         self.tier_members
             .get(tier)
             .map(|members| members.iter().map(|&index| &self.pool[index]))
+    }
+
+    /// Clear all representatives, resetting coverage counts to zero.
+    pub fn reset(&mut self) {
+        self.pool.clear();
+        for members in &mut self.tier_members {
+            members.clear();
+        }
+        self.scratch.clear();
+        self.generation = 0;
+    }
+
+    /// Set the maximum pool size.  When the pool reaches this limit, the
+    /// oldest half is evicted automatically on the next admission, keeping
+    /// memory bounded for long-running streams.  Pass `None` to disable
+    /// (unbounded, the default).
+    pub fn set_capacity(&mut self, max_pool: Option<usize>) {
+        self.max_pool = max_pool;
+    }
+
+    /// Current pool capacity limit, if any.
+    pub fn capacity(&self) -> Option<usize> {
+        self.max_pool
+    }
+
+    fn evict_oldest_half(&mut self) {
+        let keep = self.pool.len() / 2;
+        let evict = self.pool.len() - keep;
+        if evict == 0 {
+            return;
+        }
+        self.pool.drain(..evict);
+        self.scratch.drain(..evict);
+        for members in &mut self.tier_members {
+            members.retain(|&index| index >= evict);
+            for idx in members.iter_mut() {
+                *idx -= evict;
+            }
+        }
     }
 }
 
@@ -149,6 +193,11 @@ impl<T: Clone> CoverageMeter<T> {
             any_admitted |= separated;
         }
         if any_admitted {
+            if let Some(max) = self.max_pool {
+                if self.pool.len() >= max {
+                    self.evict_oldest_half();
+                }
+            }
             let index = self.pool.len();
             self.pool.push(state.clone());
             self.scratch.push((0, 0.0));
@@ -354,6 +403,58 @@ mod tests {
         assert_eq!(tier0, vec![0.0, 1.0, 1.15]);
         let tier1: Vec<f64> = meter.representatives(1).expect("tier 1").copied().collect();
         assert_eq!(tier1, vec![0.0, 1.0]);
+    }
+
+    #[test]
+    fn reset_clears_all_state() {
+        let mut meter = meter_eps(&[0.1, 0.2]);
+        let metric = Absolute;
+        meter.observe(&metric, &0.0);
+        meter.observe(&metric, &1.0);
+        assert_eq!(meter.counts(), vec![2, 2]);
+        assert_eq!(meter.unique_representatives(), 2);
+
+        meter.reset();
+        assert_eq!(meter.counts(), vec![0, 0]);
+        assert_eq!(meter.unique_representatives(), 0);
+
+        // Re-admission works after reset
+        meter.observe(&metric, &0.0);
+        assert_eq!(meter.counts(), vec![1, 1]);
+    }
+
+    #[test]
+    fn capacity_bounds_pool_size() {
+        let mut meter = meter_eps(&[0.1]);
+        meter.set_capacity(Some(10));
+        let metric = Absolute;
+        for i in 0..50 {
+            meter.observe(&metric, &(i as f64));
+        }
+        assert!(
+            meter.unique_representatives() <= 10,
+            "pool should never exceed capacity, got {}",
+            meter.unique_representatives()
+        );
+        assert!(meter.count(0).unwrap() > 0, "coverage should still work");
+    }
+
+    #[test]
+    fn eviction_preserves_recent_representatives() {
+        let mut meter = meter_eps(&[1.0]);
+        meter.set_capacity(Some(6));
+        let metric = Absolute;
+        // Admit 6 representatives at integer positions
+        for i in 0..6 {
+            meter.observe(&metric, &(i as f64 * 2.0));
+        }
+        assert_eq!(meter.unique_representatives(), 6);
+        // Next admission triggers eviction of oldest half (3), then adds 1 → 4
+        meter.observe(&metric, &100.0);
+        assert!(meter.unique_representatives() <= 6);
+        // The most recent entries should still be present
+        let reps: Vec<f64> = meter.representatives(0).unwrap().copied().collect();
+        assert!(reps.contains(&100.0), "newest entry must survive eviction");
     }
 
     #[test]
