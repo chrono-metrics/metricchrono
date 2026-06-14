@@ -130,6 +130,10 @@ impl<T: Clone> Session<T> {
         &self.coverage
     }
 
+    pub fn coverage_mut(&mut self) -> &mut CoverageMeter<T> {
+        &mut self.coverage
+    }
+
     pub fn step_count(&self) -> u64 {
         self.step_count
     }
