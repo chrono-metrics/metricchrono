@@ -8,8 +8,9 @@ In scope:
 - the aligned Rust-default, C ABI, Python, and JavaScript keep-set: tick
   distance helpers, tier and ladder construction, ladder validation, ladder
   distance/value helpers, normalization and carry rules, event-log navigation,
-  smooth distances, adaptive ladder distance, weighted consensus, promotion
-  counters, structured errors, and versioned schema helpers;
+  coverage meter, regime helpers, smooth distances, adaptive ladder distance,
+  weighted consensus, promotion counters, structured errors, and versioned
+  schema helpers;
 - default metric examples (`Absolute`, `Euclidean`, `MetricFn`) plus
   `tick_pair` and `ladder_pair`;
 - the Rust-only `metrics-extra` feature for `Cosine`, `KullbackLeibler`,
@@ -18,7 +19,9 @@ In scope:
   bindings;
 - smooth tick surrogates;
 - an in-memory event log;
+- coverage and throughput/coverage regime helpers;
 - adaptive zoom helpers;
+- guarded ambient CFAR thresholding in the Rust core only;
 - minimal consensus helpers;
 - C, Python, and JavaScript bindings over the same default keep-set;
 - golden fixtures, examples, benchmarks, and documentation.

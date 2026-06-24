@@ -34,7 +34,7 @@ class NativeLoadError(MetricChronoError):
 
 
 class NativeStatusError(MetricChronoError):
-    """Raised when the MetricChrono C ABI returns an error status."""
+    """Raised when a MetricChrono backend returns an error status."""
 
     def __init__(self, status: int, message: Optional[str] = None) -> None:
         self.status = status
@@ -240,14 +240,34 @@ def _load_library() -> ctypes.CDLL:
                 lib = ctypes.CDLL(str(path))
                 _configure_library(lib)
                 return lib
-            except OSError:
+            except (OSError, AttributeError):
+                # OSError: dlopen failed. AttributeError: the library loaded
+                # but is missing an expected mc_* symbol (wrong library) — treat
+                # it as a failed candidate so auto mode can fall back to pure.
                 continue
     tried = ", ".join(attempted)
     raise NativeLoadError(
-        "metricchrono_ffi shared library was not found. Build it with "
-        "`cargo build -p metricchrono-ffi --release` or set METRICCHRONO_FFI_LIB. "
+        "metricchrono_ffi shared library was not found. If installed from PyPI, "
+        "reinstall a matching binary wheel. For a source-tree or sdist build, "
+        "run `cargo build -p metricchrono-ffi --release`, set METRICCHRONO_FFI_LIB, "
+        "or set METRICCHRONO_BACKEND=python to use the pure-Python backend. "
         f"Tried: {tried}"
     )
+
+
+def _resolve_backend() -> str:
+    choice = os.environ.get("METRICCHRONO_BACKEND", "auto").strip().lower()
+    if choice in ("python", "pure"):
+        return "python"
+    if choice in ("native", "rust", "ffi"):
+        return "native"
+    if choice in ("", "auto"):
+        try:
+            _load_library()
+            return "native"
+        except NativeLoadError:
+            return "python"
+    raise ValueError(f"unknown METRICCHRONO_BACKEND: {choice!r}")
 
 
 def _configure_library(lib: ctypes.CDLL) -> None:
@@ -1067,7 +1087,9 @@ def smooth_ladder_distance(
     tiers: Union[Sequence[Tier], Ladder],
     sharpness: float,
 ) -> list[float]:
-    return [smooth_tick_distance(distance, tier, sharpness) for tier in _coerce_tiers(tiers)]
+    values = _coerce_tiers(tiers)
+    validate_ladder(values)
+    return [smooth_tick_distance(distance, tier, sharpness) for tier in values]
 
 
 def adaptive_ladder_distance(
@@ -1654,3 +1676,11 @@ def _ensure_exact_fields(
         if extra:
             parts.append(f"unknown fields: {', '.join(extra)}")
         raise ValueError(f"{context} schema fields mismatch ({'; '.join(parts)})")
+
+
+_BACKEND = _resolve_backend()
+if _BACKEND == "python":
+    from . import _pure
+
+    for _name in _pure._OVERRIDES:
+        globals()[_name] = getattr(_pure, _name)

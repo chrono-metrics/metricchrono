@@ -1,4 +1,4 @@
-"""CoverageMeter binding tests against the native library."""
+"""CoverageMeter binding tests against the selected backend."""
 
 import math
 

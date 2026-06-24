@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "metricchrono"
-version = "0.4.0"
-description = "Python bindings for the MetricChrono Rust C ABI"
+version = "0.5.0"
+description = "Python bindings for MetricChrono with native acceleration and a pure-Python fallback"
 readme = "README.md"
 requires-python = ">=3.9"
 license = "Apache-2.0"

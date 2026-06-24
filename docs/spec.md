@@ -54,11 +54,10 @@ inputs and are intended for callers that already validated data.
 ## Serialization
 
 Versioned JSON Schemas for `Tier`, `Ladder`, `TickVector`, and
-`ConsensusResult` live in `schemas/`. Rust uses Serde document types that reject
-unknown fields. Python and JavaScript helpers project the documented fields and
-explicitly ignore unknown extension fields after checking `metricchrono_schema`.
-Cross-field validation such as `epsilon < delta` is enforced by the public API
-constructors rather than JSON Schema.
+`ConsensusResult` live in `schemas/`. Rust, Python, and JavaScript schema
+helpers reject unknown fields after checking `metricchrono_schema`. Cross-field
+validation such as `epsilon < delta` is enforced by the public API constructors
+rather than JSON Schema.
 
 ## Golden Vectors
 

@@ -1,4 +1,4 @@
-# WASM / JavaScript API
+# JavaScript API (Optional WASM Interop)
 
 JavaScript package:
 
@@ -8,12 +8,13 @@ import { tier, geometricLadder, tickDistance, ladderDistance } from "@metricchro
 
 The public JavaScript package is dependency-free and includes TypeScript
 definitions. The default Rust crate, C ABI, Python package, and JavaScript
-package expose the same v0.2 keep-set: tick distance helpers, `Tier`/`tier`,
-ladder construction and validation, ladder distance/value helpers,
-normalization and carry rules, `EventLog`, smooth distances, adaptive ladder
-distance, `weightedConsensus`, `Absolute`/`Euclidean` plus custom metric
-callbacks, `tickPair` and `ladderPair`, `PromotionCounter`, structured errors,
-and versioned schema helpers.
+package expose the same current default surface: tick distance helpers,
+`Tier`/`tier`, ladder construction and validation, ladder distance/value
+helpers, normalization and carry rules, `EventLog`, smooth distances, adaptive
+ladder distance, `CoverageMeter`, `progressEfficiency`, `classifyRegime`,
+`weightedConsensus`, `Absolute`/`Euclidean` plus custom metric callbacks,
+`tickPair` and `ladderPair`, `PromotionCounter`, structured errors, and
+versioned schema helpers.
 
 `EventLog.append` follows the append-per-timestamp contract: call it once for
 each observation, including quiet all-zero tick records. Tier events are the
@@ -32,6 +33,6 @@ six extra Rust metrics `Cosine`, `KullbackLeibler`, `JensenShannon`,
 `metrics-extra` feature and are absent from the default bindings.
 
 `loadWasmMetricChrono` can wrap a compatible WASM module that exports
-`mc_tick_distance_raw`. The repository does not claim a separate optimized WASM
-runtime for v0.2.0; the browser-ready JavaScript implementation is the public
-wrapper.
+`mc_tick_distance_raw`. No separate optimized WASM runtime is claimed; the
+published package is pure JS with an optional WASM-interop hook
+(`loadWasmMetricChrono`).

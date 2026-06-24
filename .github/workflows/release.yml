@@ -7,13 +7,14 @@ name: release
 # Security model:
 #   - REAL publishes happen ONLY on a `v*` tag push whose commit is on origin/main.
 #   - `workflow_dispatch` is DRY-RUN ONLY (validates the pipeline, publishes nothing).
-#   - Publish tokens are present only on the real-publish steps, never on dry-run.
-#   - PyPI uses OIDC trusted publishing from a minimal job that runs no build code.
+#   - Registry credentials are minted by OIDC trusted publishing; no long-lived
+#     registry tokens are stored as repo secrets.
+#   - PyPI publishes from a minimal job that runs no build code.
 #   - Actions are SHA-pinned (Dependabot bumps them via .github/dependabot.yml).
 #
-# One-time setup before the first real release (see docs/release.md):
-#   - repo secret CARGO_REGISTRY_TOKEN  (crates.io API token)
-#   - repo secret NPM_TOKEN             (npm *automation* token — bypasses 2FA)
+# One-time trusted-publisher setup (see docs/release.md):
+#   - crates.io trusted publishers for `metricchrono-core` and `metricchrono-ffi`
+#   - npm trusted publisher for `@metricchrono/core`
 #   - PyPI trusted publisher for project `metricchrono` -> this repo + release.yml
 #
 # Validate end-to-end without publishing:  gh workflow run release.yml

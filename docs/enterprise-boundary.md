@@ -10,12 +10,14 @@ reproducibility assets. It does not contain production deployment systems.
 - basic metrics
 - smooth surrogate
 - adaptive zoom
+- coverage meter
+- guarded ambient CFAR (Rust core only)
 - basic event log
 - minimal consensus
 - serialization schema
 - Rust crate
 - Python wrapper
-- WASM/JS wrapper
+- JavaScript wrapper (optional WASM interop)
 - basic examples
 - basic benchmarks
 

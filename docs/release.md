@@ -62,9 +62,7 @@ pointing at owner `chrono-metrics`, repository `metricchrono`, workflow
   reviewers and reference it from the publish jobs, so every real publish needs a
   human approval. Protect the `v*` tag pattern so only maintainers can push
   release tags.
-- Drop the long-lived tokens by migrating npm and crates.io to **OIDC trusted
-  publishing** (both now support it, as PyPI already does here) — then no
-  `NPM_TOKEN` or `CARGO_REGISTRY_TOKEN` secret is stored at all.
+- Verify no long-lived registry tokens remain stored as repo secrets.
 
 The sections below are the manual fallback and the reference for what the
 workflow automates.
@@ -128,21 +126,29 @@ python3 -m pip install build
 python3 -m pip install pytest
 PYTHONPATH=bindings/python METRICCHRONO_FFI_LIB=target/release/libmetricchrono_ffi.dylib \
   python3 -m pytest bindings/python/tests
+PYTHONPATH=bindings/python METRICCHRONO_BACKEND=python \
+  python3 -m pytest bindings/python/tests
+tmpdir=$(mktemp -d)
+cp -R bindings/python "$tmpdir/python"
+env -u METRICCHRONO_FFI_LIB PYTHONPATH="$tmpdir/python" METRICCHRONO_BACKEND=auto \
+  python3 -c "import metricchrono as mc; print(mc.tick_distance(1.2, mc.Tier(0.5, 1.0, 0.5, 1.0)))"
 python3 -m build bindings/python --sdist --outdir /tmp/metricchrono-sdist
-python3 -m pip wheel /tmp/metricchrono-sdist/metricchrono-0.2.0.tar.gz --no-deps -w /tmp/metricchrono-wheel
-python3 -m pip install --force-reinstall /tmp/metricchrono-wheel/metricchrono-0.2.0-*.whl
+python3 -m pip wheel /tmp/metricchrono-sdist/metricchrono-*.tar.gz --no-deps -w /tmp/metricchrono-wheel
+python3 -m pip install --force-reinstall /tmp/metricchrono-wheel/metricchrono-*.whl
 python3 -c "import metricchrono as mc; print(mc.tick_distance(1.2, mc.Tier(0.5, 1.0, 0.5, 1.0)))"
 ```
 
 The source distribution vendors the Rust workspace needed by the Python build.
-The wheel build runs Cargo and bundles the platform `metricchrono-ffi` shared
-library. Source installs therefore require Cargo and a Rust toolchain.
+Published PyPI wheels are pre-built for manylinux x86_64/aarch64, macOS
+Intel/ARM, and Windows. Only the sdist fallback build needs Cargo plus a Rust
+toolchain.
 
 ## Benchmarks
 
 ```sh
 cargo bench -p metricchrono-core --bench clock_only_comparison
 cargo bench -p metricchrono-core --bench ladder_throughput
+cargo bench -p metricchrono-core --bench coverage_throughput
 cargo bench -p metricchrono-core --bench publish_suite
 ```
 

@@ -46,6 +46,6 @@ Use `mc_error_message` for a static human-readable status string.
 ## Publish Order
 
 Publish `metricchrono-core` first. This crate depends on
-`metricchrono-core = "0.2.0"`, so a standalone `cargo publish --dry-run -p
+`metricchrono-core = "0.5.0"`, so a standalone `cargo publish --dry-run -p
 metricchrono-ffi` cannot resolve until the core crate is already available in
 the crates.io index.

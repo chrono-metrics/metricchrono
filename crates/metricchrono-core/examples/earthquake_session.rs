@@ -17,19 +17,15 @@ fn main() -> metricchrono_core::Result<()> {
         // Background: scattered moderate events, well-separated in time
         2.36, 1.7, 3.2, 1.8, 2.0, 1.5, 1.7, 1.4, 1.7, 2.8, 2.1,
         // Geysers swarm: rapid micro-quakes, magnitudes 0.2–1.96, similar values
-        1.96, 0.60, 0.72, 1.55, 0.46, 1.05, 0.23, 0.27, 1.41, 1.05,
-        0.72, 1.04, 1.56, 1.03, 1.93, 1.30, 1.26, 1.09, 1.30, 0.57,
-        0.89, 0.66, 0.66, 3.40, 0.79, // M3.4 mainshock mid-swarm
-        0.97, 1.19, 1.07, 1.10, 0.73, 0.98, 0.55, 1.51, 1.04, 1.30,
-        1.22, 1.05, 0.93, 1.10, 0.63, 1.33, 1.06, 1.04, 1.27, 0.72,
-        1.50, 1.12, 1.08, 0.71, 0.80,
+        1.96, 0.60, 0.72, 1.55, 0.46, 1.05, 0.23, 0.27, 1.41, 1.05, 0.72, 1.04, 1.56, 1.03, 1.93,
+        1.30, 1.26, 1.09, 1.30, 0.57, 0.89, 0.66, 0.66, 3.40,
+        0.79, // M3.4 mainshock mid-swarm
+        0.97, 1.19, 1.07, 1.10, 0.73, 0.98, 0.55, 1.51, 1.04, 1.30, 1.22, 1.05, 0.93, 1.10, 0.63,
+        1.33, 1.06, 1.04, 1.27, 0.72, 1.50, 1.12, 1.08, 0.71, 0.80,
         // Transition: back to moderate background
-        2.56, 2.6, 1.91, 1.35, 1.69,
-        // Philippines M5.2 + M5.1: large teleseismic events
-        5.2, 5.1,
-        // Return to background
-        3.5, 3.6, 2.73, 3.81, 3.43, 2.24, 3.95,
-        // Quiet tail
+        2.56, 2.6, 1.91, 1.35, 1.69, // Philippines M5.2 + M5.1: large teleseismic events
+        5.2, 5.1, // Return to background
+        3.5, 3.6, 2.73, 3.81, 3.43, 2.24, 3.95, // Quiet tail
         1.62, 1.13, 1.82, 1.06, 1.24, 1.80, 0.87, 1.89,
     ];
 
@@ -57,10 +53,22 @@ fn main() -> metricchrono_core::Result<()> {
         let result = session.observe(&Absolute, &mag);
 
         let regime_name = match result.regime {
-            OperatingRegime::Quiescent => { regime_counts[0] += 1; "Quiescent" }
-            OperatingRegime::Progress =>  { regime_counts[1] += 1; "Progress"  }
-            OperatingRegime::Churn =>     { regime_counts[2] += 1; "Churn"     }
-            OperatingRegime::Creep =>     { regime_counts[3] += 1; "Creep"     }
+            OperatingRegime::Quiescent => {
+                regime_counts[0] += 1;
+                "Quiescent"
+            }
+            OperatingRegime::Progress => {
+                regime_counts[1] += 1;
+                "Progress"
+            }
+            OperatingRegime::Churn => {
+                regime_counts[2] += 1;
+                "Churn"
+            }
+            OperatingRegime::Creep => {
+                regime_counts[3] += 1;
+                "Creep"
+            }
         };
 
         let throughput: f64 = result.ticks.iter().sum();
@@ -88,10 +96,22 @@ fn main() -> metricchrono_core::Result<()> {
 
     // Regime distribution
     println!("--- Regime Distribution ---");
-    println!("  Quiescent : {:3}  (no change, no new territory)", regime_counts[0]);
-    println!("  Progress  : {:3}  (new territory being explored)", regime_counts[1]);
-    println!("  Churn     : {:3}  (movement revisiting known ground)", regime_counts[2]);
-    println!("  Creep     : {:3}  (sub-threshold drift accumulating)", regime_counts[3]);
+    println!(
+        "  Quiescent : {:3}  (no change, no new territory)",
+        regime_counts[0]
+    );
+    println!(
+        "  Progress  : {:3}  (new territory being explored)",
+        regime_counts[1]
+    );
+    println!(
+        "  Churn     : {:3}  (movement revisiting known ground)",
+        regime_counts[2]
+    );
+    println!(
+        "  Creep     : {:3}  (sub-threshold drift accumulating)",
+        regime_counts[3]
+    );
     println!();
 
     // Show regime transitions — where the story is

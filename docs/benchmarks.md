@@ -7,7 +7,9 @@ MetricChrono includes dependency-free benchmark binaries:
   informative.
 - `ladder_throughput` measures repeated ladder evaluation throughput for a
   32-tier geometric ladder.
-- `publish_suite` covers the v0.1 public release guardrails: single tick,
+- `coverage_throughput` measures streaming coverage-meter observe/count
+  throughput.
+- `publish_suite` covers the public release guardrails: single tick,
   ladder throughput for 4/8/16/32 tiers, smooth tick, event-log
   append/next_event, and consensus over 16 sources x 8 tiers.
 
@@ -16,6 +18,7 @@ Run them from the repository root:
 ```sh
 cargo bench -p metricchrono-core --bench clock_only_comparison
 cargo bench -p metricchrono-core --bench ladder_throughput
+cargo bench -p metricchrono-core --bench coverage_throughput
 cargo bench -p metricchrono-core --bench publish_suite
 ```
 

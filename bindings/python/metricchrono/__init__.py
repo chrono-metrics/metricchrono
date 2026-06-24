@@ -1,4 +1,4 @@
-"""Python bindings for the MetricChrono Rust C ABI."""
+"""Python bindings for MetricChrono."""
 
 from .core import (
     Absolute,

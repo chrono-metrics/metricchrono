@@ -7,12 +7,13 @@ from metricchrono import Ladder, Tier, geometric_ladder, ladder_distance, tick_d
 ```
 
 The default Rust crate, C ABI, Python package, and JavaScript package expose the
-same v0.2 keep-set: tick distance helpers, `Tier`/`TierBuilder`, ladder
-construction and validation, ladder distance/value helpers, normalization and
-carry rules, `EventLog`, smooth distances, adaptive ladder distance,
-`weighted_consensus`, `Absolute`/`Euclidean` plus `MetricFn`, `tick_pair` and
-`ladder_pair`, `PromotionCounter`, structured errors, and versioned schema
-helpers.
+same current default public surface: tick distance helpers,
+`Tier`/`TierBuilder`, ladder construction and validation, ladder
+distance/value helpers, normalization and carry rules, `EventLog`, smooth
+distances, adaptive ladder distance, `CoverageMeter`, `OperatingRegime`,
+`classify_regime`, `progress_efficiency`, `weighted_consensus`,
+`Absolute`/`Euclidean` plus `MetricFn`, `tick_pair` and `ladder_pair`,
+`PromotionCounter`, structured errors, and versioned schema helpers.
 
 Example:
 
@@ -28,10 +29,17 @@ Expected output:
 
 ```text
 0.31622776601683794
+[10.0, 4.0, 2.0]
 ```
 
-The Python package bundles the platform C ABI library in wheels. Source builds
-require Cargo and a Rust toolchain.
+`pip install metricchrono` uses pre-built wheels on supported platforms and
+needs no Rust/Cargo; only an sdist/source build requires Cargo and a Rust
+toolchain.
+
+Backend selection uses `METRICCHRONO_BACKEND=auto|python|native` (default
+`auto`). Auto uses the native library when present and loadable, otherwise it
+falls back to the pure-Python backend; the pure-Python backend needs no native
+library.
 
 `EventLog.append` follows the append-per-timestamp contract: call it once for
 each observation, including quiet all-zero tick records. Tier events are the

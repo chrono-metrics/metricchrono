@@ -1,10 +1,37 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 (2026-06-24)
 
-- Added: `GuardedQuantileThreshold`, `GuardedAmbientScale`, and
-  `CfarDecision` in `metricchrono-core` for causal guarded ambient CFAR
-  thresholds, detection floors, and robust distance normalization.
+- Added: pure-Python backend for the Python bindings. `import metricchrono` now
+  works with no native library — the package uses the bundled `metricchrono-ffi`
+  C ABI via `ctypes` when present (fast path) and otherwise falls back to a
+  byte-identical pure-Python implementation. Select the backend with
+  `METRICCHRONO_BACKEND=auto|python|native` (default `auto`); byte identity with
+  the Rust core is gated by the binding conformance vectors.
+- Added: `Session` pipeline in `metricchrono-core` — a single `observe()` that
+  wires the ladder, event log, coverage meter, and guarded ambient CFAR together
+  (`Session`, `StepResult`).
+- Added: guarded ambient CFAR in `metricchrono-core` — adaptive threshold,
+  detection floor, and robust distance normalization (`GuardedQuantileThreshold`,
+  `GuardedAmbientScale`, `CfarDecision`).
+- Added: `geometry` module — polar comparison primitives (`comparison_angle`,
+  `radial_sort`, `greedy_packing`, `shell_index`/`shell_indices`,
+  `branching_number`).
+- Added: `orientation` module — temporal reversal/openness primitives
+  (`discrete_derivative`, `earth_mover_1d`, `entropy_openness`).
+- Added: `psychophysics` module — bisection PSE and Vierordt regression
+  (`log_bisection_pse`, `magnitude_bisection_pse`, `vierordt_crossover`,
+  `aggregate_slope`, `compressed_readout`).
+- Added: `comparator` module — the epsilon-delta-p crossover theorem and
+  sensitivity-loss helpers.
+- Added: `rate_distortion` module — Lloyd optimality of geometric tier spacing.
+- Changed: `CoverageMeter` gains `reset()` and optional capacity-bounded
+  eviction, plus council hardening (i32-truncation, kappa, and NaN guards;
+  proactive eviction and capacity validation).
+- Docs: removed stale "Rust/Cargo required to install" and "WASM" remnants now
+  that wheels are pre-built and the JavaScript binding is pure JS; corrected the
+  serialization docs (all bindings reject unknown fields); documented the
+  coverage/regime and guarded-CFAR surface and the Python backend selection.
 
 ## 0.4.0 (2026-06-11)
 

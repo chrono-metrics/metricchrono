@@ -46,8 +46,8 @@ console.log(weightedConsensus([[1, 2], [3, 0]], [0.25, 0.75]));
 - Event memory: `EventLog`.
 - Carry and normalization: `PromotionCounter`, `carryRules`,
   `normalizeTicks`.
-- Metrics: scalar absolute, Euclidean, squared Euclidean, Manhattan, cosine, KL-like,
-  Jensen-Shannon, diagonal Mahalanobis, `tickPair`, and `ladderPair`.
+- Metrics: scalar absolute and Euclidean distances, custom metric callbacks,
+  `tickPair`, and `ladderPair`.
 - Consensus: `weightedConsensus`, `coherenceResiduals`, and
   `simpleWeightUpdate`.
 - Optional interop: `loadWasmMetricChrono` can wrap a compatible WASM module

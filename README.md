@@ -29,10 +29,10 @@ This repository contains:
   and minimal consensus tick field.
 - `metricchrono-ffi`: a C ABI over the allocation-free hot paths and the basic
   event log.
-- `bindings/python`: production Python bindings over the bundled C ABI shared
-  library.
-- `bindings/js`: dependency-free production JavaScript bindings with optional
-  WASM interop.
+- `bindings/python`: production Python bindings with a native C ABI fast path
+  when the shared library is present, plus a byte-identical pure-Python fallback.
+- `bindings/js`: dependency-free production JavaScript API (optional WASM
+  interop).
 
 Product-specific deployment tooling, hosted services, and organization-specific
 integrations are out of scope for this repository.
@@ -91,15 +91,19 @@ cargo bench -p metricchrono-core --bench clock_only_comparison
 python3 -m pip wheel bindings/python --no-deps -w /tmp/metricchrono-wheel
 ```
 
-Build the C ABI shared library:
+For source-tree development, the native C ABI build is optional. Build it when
+you want the ctypes fast path:
 
 ```sh
 cargo build -p metricchrono-ffi --release
 ```
 
-The Python wheel builds and bundles the native FFI library when Cargo is
-available. For direct source-tree use without installing the wheel, point the
-wrapper at a locally built library:
+`pip install metricchrono` installs a pre-built wheel (manylinux, macOS, Windows) — no Rust toolchain required.
+
+For direct source-tree use without installing the wheel, `import metricchrono`
+works with no native library via the pure-Python backend. Backend selection uses
+`METRICCHRONO_BACKEND=auto|python|native` (default `auto`). To use a locally
+built native library for the fast path, point the wrapper at it:
 
 ```sh
 export METRICCHRONO_FFI_LIB=target/release/libmetricchrono_ffi.dylib
@@ -124,7 +128,7 @@ published until `metricchrono-core` is already visible in the crates.io index.
 - [Enterprise boundary](docs/enterprise-boundary.md)
 - [Rust API](docs/api-rust.md)
 - [Python API](docs/api-python.md)
-- [WASM / JavaScript API](docs/api-wasm.md)
+- [JavaScript API (optional WASM interop)](docs/api-wasm.md)
 - [Benchmarks](docs/benchmarks.md)
 
 ## Public API Surface
@@ -139,6 +143,9 @@ The public core is deliberately small:
 - `smooth_tick_distance` and `smooth_ladder_distance` provide differentiable
   surrogates for ML and RL experiments.
 - `EventLog` is a basic in-memory event skip-list for salient tier jumps.
+- `CoverageMeter`, `progress_efficiency`, `classify_regime`, and
+  `OperatingRegime` report distinct-state coverage and throughput/coverage
+  regimes.
 - `PromotionCounter`, `carry_rules`, and `normalize_ticks` cover basic ladder
   carry and normalization helpers.
 - `adaptive_ladder_distance` and `adaptive_zoom_window` expose early-stop and
@@ -146,5 +153,7 @@ The public core is deliberately small:
 - `weighted_consensus`, `coherence_residuals`, and `simple_weight_update`
   provide a minimal consensus tick field. `weighted_consensus_tierwise` is
   available when callers need explicit source x tier reliability weights.
+- `CfarDecision`, `GuardedAmbientScale`, and `GuardedQuantileThreshold` provide
+  guarded ambient CFAR thresholding in the Rust core only.
 
 See [docs/scope.md](docs/scope.md) for the repository scope.
